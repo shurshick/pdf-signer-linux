@@ -19,10 +19,10 @@ classifiers = [
 ]
 dependencies = [
     "pyhanko>=0.25.0",
-    "pyhanko-sign-offline>=1.2.0",
     "python-pkcs11>=0.7.0",
     "PyQt5>=5.15.0",
-    "pyhanko-certvalidator>=0.26.0",
+    "Pillow>=10.0.0",
+    "PyMuPDF>=1.23.0",
     "cryptography>=41.0.0",
 ]
 
