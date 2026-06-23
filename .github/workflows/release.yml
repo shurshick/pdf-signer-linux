@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version
+        required: true
+        default: "1.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build
+        run: python -m build
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: pdfsigner ${{ inputs.version }} for Linux
+          files: dist/*
+          generate_release_notes: true
