@@ -183,7 +183,7 @@ jobs:
 
           rpmbuild -bb ~/rpmbuild/SPECS/pdfsigner.spec --define "_topdir $HOME/rpmbuild"
 
-          cp ~/rpmbuild/RPMS/${ARCH}/${PKG_NAME}-${VERSION}-1.*.${ARCH}.rpm dist/
+          cp ~/rpmbuild/RPMS/${ARCH}/${PKG_NAME}-${VERSION}-1.${ARCH}.rpm dist/
           rm -rf "$BUILD_DIR"
 
       - name: Upload artifacts
