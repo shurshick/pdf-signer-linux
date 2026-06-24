@@ -116,6 +116,8 @@ jobs:
           EOF
 
           cp app-icon.png "$BUILD_DIR/usr/share/pixmaps/pdfsigner.png"
+          mkdir -p "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps"
+          cp app-icon.png "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/pdfsigner.png"
 
           dpkg-deb --build "$BUILD_DIR" "dist/pdfsigner_${VERSION}_${ARCH}.deb"
 
@@ -146,6 +148,8 @@ jobs:
           EOF
 
           cp app-icon.png "$BUILD_DIR/usr/share/pixmaps/pdfsigner.png"
+          mkdir -p "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps"
+          cp app-icon.png "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/pdfsigner.png"
 
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
@@ -167,15 +171,18 @@ jobs:
           mkdir -p %{buildroot}/usr/bin
           mkdir -p %{buildroot}/usr/share/applications
           mkdir -p %{buildroot}/usr/share/pixmaps
+          mkdir -p %{buildroot}/usr/share/icons/hicolor/256x256/apps
           cp %{_sourcedir}/pdfsigner %{buildroot}/usr/bin/pdfsigner
           chmod 755 %{buildroot}/usr/bin/pdfsigner
           cp %{_sourcedir}/pdfsigner.desktop %{buildroot}/usr/share/applications/pdfsigner.desktop
           cp %{_sourcedir}/pdfsigner.png %{buildroot}/usr/share/pixmaps/pdfsigner.png
+          cp %{_sourcedir}/pdfsigner.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/pdfsigner.png
 
           %files
           /usr/bin/pdfsigner
           /usr/share/applications/pdfsigner.desktop
           /usr/share/pixmaps/pdfsigner.png
+          /usr/share/icons/hicolor/256x256/apps/pdfsigner.png
           SPEC
 
           sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" ~/rpmbuild/SPECS/pdfsigner.spec
