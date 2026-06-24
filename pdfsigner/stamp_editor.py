@@ -2,18 +2,16 @@ import os
 import time
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSpinBox, QDoubleSpinBox, QCheckBox, QGroupBox, QGridLayout,
-    QLineEdit, QFileDialog, QMessageBox, QComboBox,
+    QSpinBox, QDoubleSpinBox, QCheckBox, QGridLayout,
+    QComboBox, QScrollArea, QWidget,
 )
-from PyQt5.QtCore import Qt, QPoint, pyqtSignal
+from PyQt5.QtCore import Qt, QPoint, QRect
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QFont, QPen
 
-from pdfsigner.settings import StampProfile, BUILT_IN_PROFILES
+from pdfsigner.settings import StampProfile
 
 
 class StampPreviewDialog(QDialog):
-    stamp_position_changed = pyqtSignal(float, float)
-
     def __init__(self, profile: StampProfile, cert_name="", reason="", parent=None):
         super().__init__(parent)
         self.profile = profile
@@ -120,6 +118,12 @@ class StampPreviewDialog(QDialog):
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._update_preview()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
         self._update_preview()
 
     def _on_param_changed(self):
@@ -136,13 +140,13 @@ class StampPreviewDialog(QDialog):
     def _on_coord_changed(self):
         self.stamp_x = self.x_spin.value()
         self.stamp_y = self.y_spin.value()
+        self.profile.use_custom_position = True
         self._update_preview()
 
     def _apply_position(self):
         self.profile.use_custom_position = True
         self.profile.custom_x = self.stamp_x * 72.0 / 25.4
         self.profile.custom_y = self.stamp_y * 72.0 / 25.4
-        self.stamp_position_changed.emit(self.stamp_x, self.stamp_y)
 
     def _reset_position(self):
         self.profile.use_custom_position = False
@@ -156,7 +160,7 @@ class StampPreviewDialog(QDialog):
     def _update_preview(self):
         w = self.preview_label.width()
         h = self.preview_label.height()
-        if w < 10 or h < 10:
+        if w < 50 or h < 50:
             return
 
         pixmap = QPixmap(w, h)
@@ -164,20 +168,19 @@ class StampPreviewDialog(QDialog):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        page_rect = pixmap.rect().adjusted(20, 20, -20, -20)
+        page_rect = QRect(20, 20, w - 40, h - 40)
         painter.setPen(QPen(QColor(0, 0, 0), 1))
+        painter.setBrush(QColor(245, 245, 245))
         painter.drawRect(page_rect)
 
         font = QFont("DejaVu Sans", 8)
         painter.setFont(font)
-        painter.setPen(QColor(100, 100, 100))
-        text_rect = page_rect.adjusted(10, 10, -10, -10)
-        painter.drawText(text_rect, Qt.AlignLeft | Qt.AlignTop,
-                         "Sample PDF content area...\nText blocks for reference")
+        painter.setPen(QColor(150, 150, 150))
+        painter.drawText(page_rect, Qt.AlignCenter, "Sample PDF page")
 
         mm_to_px = min(w, h) / 297.0
-        stamp_w = int(self.profile.width_mm * mm_to_px)
-        stamp_h = int(self.profile.height_mm * mm_to_px)
+        stamp_w = max(40, int(self.profile.width_mm * mm_to_px))
+        stamp_h = max(20, int(self.profile.height_mm * mm_to_px))
 
         if self.profile.use_custom_position:
             sx = int(self.stamp_x * mm_to_px) + 20
@@ -194,11 +197,14 @@ class StampPreviewDialog(QDialog):
             else:
                 sy = page_rect.bottom() - stamp_h - margin
 
-        stamp_rect = (sx, sy, stamp_w, stamp_h)
+        sx = max(0, min(sx, w - stamp_w))
+        sy = max(0, min(sy, h - stamp_h))
+
+        stamp_rect = QRect(sx, sy, stamp_w, stamp_h)
         blue = QColor(0, 74, 173)
         painter.setPen(QPen(blue, 2))
-        painter.setBrush(QColor(240, 245, 255, 200))
-        painter.drawRoundedRect(stamp_rect[0], stamp_rect[1], stamp_rect[2], stamp_rect[3], 4, 4)
+        painter.setBrush(QColor(230, 240, 255, 220))
+        painter.drawRoundedRect(stamp_rect, 4, 4)
 
         text_font = QFont("DejaVu Sans", max(6, int(self.profile.font_size * 0.6)))
         painter.setFont(text_font)
@@ -214,42 +220,50 @@ class StampPreviewDialog(QDialog):
         if self.include_issuer.isChecked():
             lines.append("Issuer: ...")
 
-        text_y = stamp_rect[1] + 8
-        text_x = stamp_rect[0] + 6
-        max_text_w = stamp_rect[2] - 12
+        text_y = stamp_rect.top() + 10
+        text_x = stamp_rect.left() + 8
+        max_text_w = stamp_rect.width() - 16
+        line_h = 14
         for line in lines:
-            painter.drawText(text_x, text_y, max_text_w, 16, Qt.TextSingleLine, line)
-            text_y += 14
+            if text_y + line_h > stamp_rect.bottom() - 4:
+                break
+            painter.drawText(text_x, text_y, max_text_w, line_h, Qt.AlignLeft | Qt.AlignTop, line)
+            text_y += line_h
 
         painter.end()
         self.preview_label.setPixmap(pixmap)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            stamp_rect = self._get_stamp_rect()
-            if stamp_rect and stamp_rect.contains(event.pos()):
-                self.dragging = True
-                self.drag_offset = event.pos() - QPoint(stamp_rect[0], stamp_rect[1])
-
-    def mouseMoveEvent(self, event):
-        if self.dragging:
-            pos = event.pos() - self.drag_offset
-            mm_to_px = min(self.preview_label.width(), self.preview_label.height()) / 297.0
-            self.stamp_x = max(0, (pos.x() - 20) / mm_to_px)
-            self.stamp_y = max(0, (self.preview_label.height() - pos.y() - int(self.profile.height_mm * mm_to_px) - 20) / mm_to_px)
-            self.x_spin.setValue(self.stamp_x)
-            self.y_spin.setValue(self.stamp_y)
-            self._update_preview()
-
-    def mouseReleaseEvent(self, event):
-        self.dragging = False
 
     def _get_stamp_rect(self):
         w = self.preview_label.width()
         h = self.preview_label.height()
         mm_to_px = min(w, h) / 297.0
-        stamp_w = int(self.profile.width_mm * mm_to_px)
-        stamp_h = int(self.profile.height_mm * mm_to_px)
+        stamp_w = max(40, int(self.profile.width_mm * mm_to_px))
+        stamp_h = max(20, int(self.profile.height_mm * mm_to_px))
         sx = int(self.stamp_x * mm_to_px) + 20
         sy = h - int(self.stamp_y * mm_to_px) - stamp_h - 20
-        return (sx, sy, stamp_w, stamp_h)
+        return QRect(max(0, sx), max(0, sy), stamp_w, stamp_h)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            rect = self._get_stamp_rect()
+            if rect.contains(event.pos()):
+                self.dragging = True
+                self.drag_offset = event.pos() - rect.topLeft()
+
+    def mouseMoveEvent(self, event):
+        if self.dragging:
+            pos = event.pos() - self.drag_offset
+            mm_to_px = min(self.preview_label.width(), self.preview_label.height()) / 297.0
+            stamp_h = int(self.profile.height_mm * mm_to_px)
+            self.stamp_x = max(0, (pos.x() - 20) / mm_to_px)
+            self.stamp_y = max(0, (self.preview_label.height() - pos.y() - stamp_h - 20) / mm_to_px)
+            self.x_spin.blockSignals(True)
+            self.y_spin.blockSignals(True)
+            self.x_spin.setValue(round(self.stamp_x, 1))
+            self.y_spin.setValue(round(self.stamp_y, 1))
+            self.x_spin.blockSignals(False)
+            self.y_spin.blockSignals(False)
+            self._update_preview()
+
+    def mouseReleaseEvent(self, event):
+        self.dragging = False

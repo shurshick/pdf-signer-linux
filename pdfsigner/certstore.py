@@ -74,64 +74,72 @@ def load_certificates() -> List[CertInfo]:
 
 
 def _load_from_certmgr() -> List[CertInfo]:
+    from pdfsigner.applog import log_info, log_error
     certmgr = _find_executable(CERTMGR_PATHS)
     if not certmgr:
+        log_info("certmgr not found in: " + ", ".join(CERTMGR_PATHS))
         return []
+    log_info(f"certmgr found at: {certmgr}")
     try:
         result = subprocess.run(
             [certmgr, "-list", "-store", "uMy"],
             capture_output=True, text=True, timeout=10,
         )
+        log_info(f"certmgr exit code: {result.returncode}")
+        log_info(f"certmgr stdout ({len(result.stdout)} bytes): {result.stdout[:2000]}")
+        if result.stderr:
+            log_info(f"certmgr stderr: {result.stderr[:500]}")
         if result.returncode != 0:
-            if result.stderr:
-                from pdfsigner.applog import log_error
-                log_error("certmgr error", Exception(result.stderr))
             return []
         certs = _parse_certmgr_output(result.stdout)
-        if not certs:
-            from pdfsigner.applog import log_info
-            log_info(f"certmgr output ({len(result.stdout)} bytes): {result.stdout[:500]}")
+        log_info(f"parsed {len(certs)} certificate(s) from certmgr")
         return certs
     except FileNotFoundError:
+        log_error("certmgr not found", Exception(certmgr))
         return []
     except Exception as e:
-        from pdfsigner.applog import log_error
         log_error("certmgr failed", e)
         return []
 
 
 def _parse_certmgr_output(output: str) -> List[CertInfo]:
+    from pdfsigner.applog import log_info
     certs = []
     current = None
-    for line in output.splitlines():
+    lines = output.splitlines()
+    log_info(f"parsing {len(lines)} lines from certmgr")
+    for line in lines:
+        raw = line
         line = line.strip()
         if not line:
             continue
         if _is_separator(line):
-            if current:
+            if current and current.subject_cn:
                 current.label = current.display_name
                 certs.append(current)
             current = CertInfo()
             continue
         if current is None:
-            continue
-        if line.startswith("Subject:") or line.startswith("Субъект:"):
+            current = CertInfo()
+        if "Subject" in line or "Субъект" in line or "SUBJECT" in line.upper():
             current.subject_cn = _extract_cn(_after_colon(line))
-        elif line.startswith("Issuer:") or line.startswith("Издатель:"):
+            log_info(f"  found subject_cn: {current.subject_cn}")
+        elif "Issuer" in line or "Издатель" in line:
             current.issuer_cn = _extract_cn(_after_colon(line))
-        elif line.startswith("Serial number:") or line.startswith("Серийный номер:"):
+        elif "Serial" in line or "Серийный" in line:
             current.serial = _after_colon(line).strip()
         elif "thumbprint" in line.lower() or "отпечаток" in line.lower():
             current.thumbprint = _after_colon(line).strip()
-        elif line.startswith("Container:") or line.startswith("Контейнер:"):
+        elif "Container" in line or "Контейнер" in line:
             current.container = _after_colon(line).strip()
         elif "provider" in line.lower() or "провайдер" in line.lower():
             current.provider = _after_colon(line).strip()
-        elif "private key" in line.lower() or "закрытый ключ" in line.lower():
+        elif "private" in line.lower() or "закрытый" in line.lower() or "key" in line.lower():
             current.has_private_key = True
     if current and current.subject_cn:
         current.label = current.display_name
         certs.append(current)
+    log_info(f"parsed result: {len(certs)} cert(s)")
     return certs
 
 

@@ -617,5 +617,3 @@ class MainWindow(QMainWindow):
         reason = self.reason.text()
         dialog = StampPreviewDialog(profile, cert_name, reason, self)
         dialog.exec_()
-        self.profile_select.setCurrentText(t(profile.name))
-        self.position_select.setCurrentText(t(profile.position.replace("-", "_")))
