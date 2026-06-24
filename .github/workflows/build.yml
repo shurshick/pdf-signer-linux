@@ -48,8 +48,11 @@ jobs:
       - name: Build standalone executable
         run: |
           pyinstaller --onefile --name pdfsigner \
+            --icon=app-icon.png \
             --add-data "pdfsigner:pdfsigner" \
+            --add-data "app-icon.png:." \
             --hidden-import pdfsigner \
+            --hidden-import pdfsigner.stamp_editor \
             --hidden-import PyQt5 \
             --hidden-import PyQt5.QtWidgets \
             --hidden-import PyQt5.QtCore \
@@ -112,7 +115,7 @@ jobs:
           Categories=Utility;Security;
           EOF
 
-          touch "$BUILD_DIR/usr/share/pixmaps/pdfsigner.png"
+          cp app-icon.png "$BUILD_DIR/usr/share/pixmaps/pdfsigner.png"
 
           dpkg-deb --build "$BUILD_DIR" "dist/pdfsigner_${VERSION}_${ARCH}.deb"
 
@@ -142,7 +145,7 @@ jobs:
           Categories=Utility;Security;
           EOF
 
-          touch "$BUILD_DIR/usr/share/pixmaps/pdfsigner.png"
+          cp app-icon.png "$BUILD_DIR/usr/share/pixmaps/pdfsigner.png"
 
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
@@ -167,7 +170,7 @@ jobs:
           cp %{_sourcedir}/pdfsigner %{buildroot}/usr/bin/pdfsigner
           chmod 755 %{buildroot}/usr/bin/pdfsigner
           cp %{_sourcedir}/pdfsigner.desktop %{buildroot}/usr/share/applications/pdfsigner.desktop
-          cp %{_sourcedir}/pdfsigner.png %{buildroot}/usr/share/pixmaps/pdfsigner.png || touch %{buildroot}/usr/share/pixmaps/pdfsigner.png
+          cp %{_sourcedir}/pdfsigner.png %{buildroot}/usr/share/pixmaps/pdfsigner.png
 
           %files
           /usr/bin/pdfsigner
@@ -179,7 +182,7 @@ jobs:
 
           cp dist/pdfsigner ~/rpmbuild/SOURCES/
           cp "$BUILD_DIR/usr/share/applications/pdfsigner.desktop" ~/rpmbuild/SOURCES/
-          touch ~/rpmbuild/SOURCES/pdfsigner.png
+          cp app-icon.png ~/rpmbuild/SOURCES/pdfsigner.png
 
           rpmbuild -bb ~/rpmbuild/SPECS/pdfsigner.spec --define "_topdir $HOME/rpmbuild"
 

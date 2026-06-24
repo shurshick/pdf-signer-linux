@@ -83,11 +83,20 @@ def _load_from_certmgr() -> List[CertInfo]:
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode != 0:
+            if result.stderr:
+                from pdfsigner.applog import log_error
+                log_error("certmgr error", Exception(result.stderr))
             return []
-        return _parse_certmgr_output(result.stdout)
+        certs = _parse_certmgr_output(result.stdout)
+        if not certs:
+            from pdfsigner.applog import log_info
+            log_info(f"certmgr output ({len(result.stdout)} bytes): {result.stdout[:500]}")
+        return certs
     except FileNotFoundError:
         return []
-    except Exception:
+    except Exception as e:
+        from pdfsigner.applog import log_error
+        log_error("certmgr failed", e)
         return []
 
 
@@ -208,7 +217,8 @@ def _is_separator(line: str) -> bool:
         i += 1
     if i == 0 or i >= len(stripped):
         return False
-    return all(c == '-' for c in stripped[i:])
+    rest = stripped[i:]
+    return all(c == '-' for c in rest) and len(rest) >= 3
 
 
 def _after_colon(s: str) -> str:
