@@ -15,7 +15,11 @@ jobs:
       - name: Install test dependencies
         run: |
           apt-get update
-          apt-get install -y curl ca-certificates xz-utils file
+          apt-get install -y curl ca-certificates xz-utils file \
+            libc6 libgl1 libglib2.0-0 libx11-6 \
+            libxcb1 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+            libxkbcommon0 libxkbcommon-x11-0
 
       - name: Download DEB from release
         run: |
