@@ -6,10 +6,9 @@ VERSION="${VERSION:-1.0.0}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist"
 BUILDROOT="${ROOT_DIR}/.rpmbuild"
-INSTALL_DIR="${BUILDROOT}/SOURCES/opt/${APP_NAME}"
 
 echo "==> Checking project files"
-for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/packaging/rpm/pdfsigner.spec"; do
+for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/packaging/pdfsigner.desktop" "${ROOT_DIR}/packaging/pdfsigner.png"; do
     if [ ! -f "$f" ]; then
         echo "Error: $f not found"
         exit 1
@@ -18,30 +17,40 @@ done
 
 echo "==> Cleaning previous build output"
 rm -rf "${BUILDROOT}"
-mkdir -p "${BUILDROOT}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "${DIST_DIR}" "${INSTALL_DIR}/lib"
+mkdir -p "${BUILDROOT}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "${DIST_DIR}"
 
-echo "==> Installing Python package (pure Python only, no .so files)"
-pip3 install --target "${INSTALL_DIR}/lib" --no-compile --no-deps "${ROOT_DIR}" 2>/dev/null || \
-pip install --target "${INSTALL_DIR}/lib" --no-compile --no-deps "${ROOT_DIR}"
+echo "==> Installing Python dependencies"
+pip3 install pyinstaller 2>/dev/null || pip install pyinstaller
+pip3 install -e "${ROOT_DIR}" 2>/dev/null || pip install -e "${ROOT_DIR}"
 
-echo "==> Installing dependencies separately"
-pip3 install --target "${INSTALL_DIR}/lib" --no-compile \
-    pyhanko python-pkcs11 PyQt5 Pillow PyMuPDF cryptography 2>/dev/null || \
-pip install --target "${INSTALL_DIR}/lib" --no-compile \
-    pyhanko python-pkcs11 PyQt5 Pillow PyMuPDF cryptography
+echo "==> Building self-contained binary with PyInstaller"
+cd "${ROOT_DIR}"
+pyinstaller \
+    --onefile \
+    --name "${APP_NAME}" \
+    --distpath "${BUILDROOT}/SOURCES" \
+    --workpath "${ROOT_DIR}/build" \
+    --specpath "${ROOT_DIR}" \
+    --hidden-import pdfsigner \
+    --hidden-import pdfsigner.gui \
+    --hidden-import pdfsigner.signer \
+    --hidden-import pdfsigner.stamp \
+    --hidden-import pdfsigner.pdfstamp \
+    --hidden-import pdfsigner.certstore \
+    --hidden-import pdfsigner.settings \
+    --hidden-import pdfsigner.diagnostics \
+    --hidden-import pdfsigner.applog \
+    --collect-all pdfsigner \
+    --noconfirm \
+    pdfsigner/main.py
 
-echo "==> Removing .so files that cause dependency issues"
-find "${INSTALL_DIR}/lib" -name "*.so" -delete 2>/dev/null || true
-find "${INSTALL_DIR}/lib" -name "*.so.*" -delete 2>/dev/null || true
-find "${INSTALL_DIR}/lib" -name "*.dylib" -delete 2>/dev/null || true
-
-echo "==> Preparing RPM sources"
-cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
-cp "${ROOT_DIR}/packaging/pdfsigner.desktop" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
+echo "==> Preparing RPM sources (like Go project)"
+cp "${ROOT_DIR}/packaging/pdfsigner.desktop" "${BUILDROOT}/SOURCES/packaging/"
+cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/SOURCES/packaging/"
 cp "${ROOT_DIR}/README.md" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
 cp "${ROOT_DIR}/LICENSE" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
 
-echo "==> Generating SPEC"
+echo "==> Generating SPEC (matching Go project format)"
 cat > "${BUILDROOT}/SPECS/pdfsigner.spec" << 'SPEC'
 Name:           pdfsigner
 Version:        VERSION_PLACEHOLDER
@@ -52,18 +61,14 @@ License:        AGPLv3
 URL:            https://github.com/shurshick/pdf-signer-linux
 BuildArch:      x86_64
 
-Requires:       python3 >= 3.9
-Requires:       python3-pyqt5
-Requires:       python3-pyqt5-qtsvg
-Requires:       libgl1-mesa-glx or libGL
-Requires:       glib2
-Requires:       libX11
+Requires:       /opt/cprocsp/bin/amd64/certmgr
+Requires:       /opt/cprocsp/bin/amd64/csptest
 
 %description
 Desktop application for signing PDF documents with CryptoPro CSP on Linux.
 Supports embedded CAdES-BES signatures via PKCS#11, visible stamps
 compliant with GOST R 7.0.97-2025, signature verification, and
-CryptoPro diagnostics.
+CryptoPro diagnostics. Self-contained binary, no Python required.
 
 %prep
 # Nothing to unpack.
@@ -74,31 +79,14 @@ CryptoPro diagnostics.
 %install
 rm -rf %{buildroot}
 
-mkdir -p %{buildroot}/opt/pdfsigner/lib
-cp -a %{_sourcedir}/opt/pdfsigner/lib/* %{buildroot}/opt/pdfsigner/lib/
-
-mkdir -p %{buildroot}/usr/bin
-cat > %{buildroot}/usr/bin/pdfsigner << 'LAUNCHER'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export PYTHONPATH="${SCRIPT_DIR}/opt/pdfsigner/lib:${PYTHONPATH:-}"
-exec python3 -m pdfsigner "$@"
-LAUNCHER
-chmod 755 %{buildroot}/usr/bin/pdfsigner
-
-install -D -m 0644 %{_sourcedir}/pdfsigner.desktop %{buildroot}/usr/share/applications/pdfsigner.desktop
-install -D -m 0644 %{_sourcedir}/pdfsigner.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/pdfsigner.png 2>/dev/null || true
-
-mkdir -p %{buildroot}/usr/share/doc/pdfsigner
-cp -f %{_sourcedir}/README.md %{buildroot}/usr/share/doc/pdfsigner/ 2>/dev/null || true
-cp -f %{_sourcedir}/LICENSE %{buildroot}/usr/share/doc/pdfsigner/COPYING 2>/dev/null || true
+install -D -m 0755 %{_sourcedir}/pdfsigner %{buildroot}/usr/bin/pdfsigner
+install -D -m 0644 %{_sourcedir}/packaging/pdfsigner.desktop %{buildroot}/usr/share/applications/pdfsigner.desktop
+install -D -m 0644 %{_sourcedir}/packaging/pdfsigner.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/pdfsigner.png
 
 %files
-/opt/pdfsigner/
 /usr/bin/pdfsigner
 /usr/share/applications/pdfsigner.desktop
 /usr/share/icons/hicolor/256x256/apps/pdfsigner.png
-/usr/share/doc/pdfsigner/
 
 %changelog
 * Sun Jun 22 2026 shurshick <noreply@example.com> - VERSION_PLACEHOLDER-1

@@ -21,27 +21,40 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system dependencies
+      - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-pyqt5 libgl1-mesa-dev dpkg-dev rpm
 
-      - name: Install Python build tools
-        run: pip install build
+      - name: Install Python dependencies
+        run: pip install build pyinstaller
 
-      - name: Build wheel
-        run: python -m build --wheel --outdir dist
+      - name: Install application
+        run: pip install .
 
-      - name: Build source distribution
-        run: python -m build --sdist --outdir dist
-
-      - name: Build DEB
+      - name: Build self-contained binary
         run: |
-          VERSION=${{ inputs.version }} bash packaging/build-deb.sh
+          pyinstaller \
+            --onefile \
+            --name pdfsigner \
+            --hidden-import pdfsigner \
+            --hidden-import pdfsigner.gui \
+            --hidden-import pdfsigner.signer \
+            --hidden-import pdfsigner.stamp \
+            --hidden-import pdfsigner.pdfstamp \
+            --hidden-import pdfsigner.certstore \
+            --hidden-import pdfsigner.settings \
+            --hidden-import pdfsigner.diagnostics \
+            --hidden-import pdfsigner.applog \
+            --collect-all pdfsigner \
+            --noconfirm \
+            pdfsigner/main.py
 
-      - name: Build RPM
-        run: |
-          VERSION=${{ inputs.version }} bash packaging/build-rpm.sh
+      - name: Build DEB (like Go project)
+        run: VERSION=${{ inputs.version }} bash packaging/build-deb.sh
+
+      - name: Build RPM (like Go project)
+        run: VERSION=${{ inputs.version }} bash packaging/build-rpm.sh
 
       - name: List artifacts
         run: ls -lh dist/
@@ -52,8 +65,7 @@ jobs:
           tag_name: v${{ inputs.version }}
           name: pdfsigner ${{ inputs.version }} for Linux
           files: |
-            dist/pdfsigner-${{ inputs.version }}-py3-none-any.whl
-            dist/pdfsigner-${{ inputs.version }}.tar.gz
+            dist/pdfsigner
             dist/pdfsigner_${{ inputs.version }}_amd64.deb
             dist/pdfsigner-${{ inputs.version }}-1.x86_64.rpm
           generate_release_notes: true

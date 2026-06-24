@@ -6,10 +6,9 @@ VERSION="${VERSION:-1.0.0}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist"
 BUILDROOT="${ROOT_DIR}/.debbuild"
-INSTALL_DIR="${BUILDROOT}/opt/${APP_NAME}"
 
 echo "==> Checking project files"
-for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/README.md"; do
+for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/packaging/pdfsigner.desktop" "${ROOT_DIR}/packaging/pdfsigner.png"; do
     if [ ! -f "$f" ]; then
         echo "Error: $f not found"
         exit 1
@@ -23,53 +22,41 @@ mkdir -p "${BUILDROOT}/DEBIAN" \
     "${BUILDROOT}/usr/share/applications" \
     "${BUILDROOT}/usr/share/icons/hicolor/256x256/apps" \
     "${BUILDROOT}/usr/share/doc/${APP_NAME}" \
-    "${INSTALL_DIR}/lib" \
     "${DIST_DIR}"
 
-echo "==> Installing Python package (pure Python only, no .so files)"
-pip3 install --target "${INSTALL_DIR}/lib" --no-compile --no-deps "${ROOT_DIR}" 2>/dev/null || \
-pip install --target "${INSTALL_DIR}/lib" --no-compile --no-deps "${ROOT_DIR}"
+echo "==> Installing Python dependencies"
+pip3 install pyinstaller 2>/dev/null || pip install pyinstaller
+pip3 install -e "${ROOT_DIR}" 2>/dev/null || pip install -e "${ROOT_DIR}"
 
-echo "==> Installing dependencies separately"
-pip3 install --target "${INSTALL_DIR}/lib" --no-compile \
-    pyhanko python-pkcs11 PyQt5 Pillow PyMuPDF cryptography 2>/dev/null || \
-pip install --target "${INSTALL_DIR}/lib" --no-compile \
-    pyhanko python-pkcs11 PyQt5 Pillow PyMuPDF cryptography
+echo "==> Building self-contained binary with PyInstaller"
+cd "${ROOT_DIR}"
+pyinstaller \
+    --onefile \
+    --name "${APP_NAME}" \
+    --distpath "${DIST_DIR}" \
+    --workpath "${ROOT_DIR}/build" \
+    --specpath "${ROOT_DIR}" \
+    --hidden-import pdfsigner \
+    --hidden-import pdfsigner.gui \
+    --hidden-import pdfsigner.signer \
+    --hidden-import pdfsigner.stamp \
+    --hidden-import pdfsigner.pdfstamp \
+    --hidden-import pdfsigner.certstore \
+    --hidden-import pdfsigner.settings \
+    --hidden-import pdfsigner.diagnostics \
+    --hidden-import pdfsigner.applog \
+    --collect-all pdfsigner \
+    --noconfirm \
+    pdfsigner/main.py
 
-echo "==> Removing .so files that cause dependency issues"
-find "${INSTALL_DIR}/lib" -name "*.so" -delete 2>/dev/null || true
-find "${INSTALL_DIR}/lib" -name "*.so.*" -delete 2>/dev/null || true
-find "${INSTALL_DIR}/lib" -name "*.dylib" -delete 2>/dev/null || true
+echo "==> Installing binary (like Go project)"
+install -D -m 0755 "${DIST_DIR}/${APP_NAME}" "${BUILDROOT}/usr/bin/${APP_NAME}"
 
-echo "==> Creating launcher script"
-cat > "${BUILDROOT}/usr/bin/${APP_NAME}" << 'LAUNCHER'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export PYTHONPATH="${SCRIPT_DIR}/opt/pdfsigner/lib:${PYTHONPATH:-}"
-exec python3 -m pdfsigner "$@"
-LAUNCHER
-chmod 755 "${BUILDROOT}/usr/bin/${APP_NAME}"
+echo "==> Installing desktop file (like Go project)"
+install -D -m 0644 "${ROOT_DIR}/packaging/pdfsigner.desktop" "${BUILDROOT}/usr/share/applications/${APP_NAME}.desktop"
 
-echo "==> Installing icon"
-if [ -f "${ROOT_DIR}/packaging/pdfsigner.png" ]; then
-    cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/usr/share/icons/hicolor/256x256/apps/pdfsigner.png"
-    echo "Icon installed successfully"
-else
-    echo "WARNING: Icon file not found"
-fi
-
-echo "==> Installing desktop file"
-cat > "${BUILDROOT}/usr/share/applications/${APP_NAME}.desktop" << 'EOF'
-[Desktop Entry]
-Name=PDF Signer Linux
-Comment=PDF signing and visible stamp tool for Linux with CryptoPro CSP
-Exec=pdfsigner
-Icon=pdfsigner
-Terminal=false
-Type=Application
-Categories=Utility;Security;
-Keywords=pdf;sign;crypto;stamp;
-EOF
+echo "==> Installing icon (like Go project)"
+install -D -m 0644 "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
 
 echo "==> Installing documentation"
 cp "${ROOT_DIR}/README.md" "${BUILDROOT}/usr/share/doc/${APP_NAME}/" 2>/dev/null || true
@@ -88,15 +75,13 @@ Architecture: amd64
 Installed-Size: ${INSTALLED_SIZE}
 Maintainer: shurshick <noreply@example.com>
 Homepage: https://github.com/shurshick/pdf-signer-linux
-Depends: python3 (>= 3.9), python3-pyqt5, python3-pyqt5.qtsvg, libgl1-mesa-glx | libgl1, libglib2.0-0, libx11-6
+Depends: libc6, libgl1-mesa-glx | libGL, libglib2.0-0, libx11-6
 Recommends: libcryptopro-java
 Description: Desktop PDF signing and visible stamp tool for Linux with CryptoPro CSP
  Desktop application for signing PDF documents with CryptoPro CSP
  on Linux. Supports embedded CAdES-BES signatures via PKCS#11, visible
  stamps compliant with GOST R 7.0.97-2025, signature verification, and
- CryptoPro diagnostics.
- .
- Requires python3 and system Qt libraries.
+ CryptoPro diagnostics. Self-contained binary, no Python required.
 EOF
 
 echo "==> Building DEB"
