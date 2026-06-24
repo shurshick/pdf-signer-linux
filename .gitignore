@@ -8,3 +8,8 @@ build/
 .eggs/
 venv/
 .venv/
+*.rpm
+*.deb
+*.whl
+*.tar.gz
+app-icon.png
