@@ -20,11 +20,11 @@ echo "==> Cleaning previous build output"
 rm -rf "${BUILDROOT}"
 mkdir -p "${BUILDROOT}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "${DIST_DIR}"
 
-echo "==> Creating virtualenv with all dependencies"
+echo "==> Installing Python package to temp dir"
 VENV_DIR="${BUILDROOT}/SOURCES/opt/${APP_NAME}"
-python3 -m venv "${VENV_DIR}"
-"${VENV_DIR}/bin/pip" install --upgrade pip
-"${VENV_DIR}/bin/pip" install "${ROOT_DIR}"
+mkdir -p "${VENV_DIR}/lib"
+pip3 install --target "${VENV_DIR}/lib" "${ROOT_DIR}" 2>/dev/null || \
+pip install --target "${VENV_DIR}/lib" "${ROOT_DIR}"
 
 echo "==> Preparing RPM sources"
 cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
@@ -44,16 +44,16 @@ URL:            https://github.com/shurshick/pdf-signer-linux
 BuildArch:      x86_64
 
 Requires:       python3 >= 3.9
+Requires:       python3-pyqt5
 
 %description
 Desktop application for signing PDF documents with CryptoPro CSP on Linux.
 Supports embedded CAdES-BES signatures via PKCS#11, visible stamps
 compliant with GOST R 7.0.97-2025, signature verification, and
-CryptoPro diagnostics. Includes all Python dependencies in an
-isolated virtualenv.
+CryptoPro diagnostics.
 
 %prep
-# Nothing to unpack - virtualenv is pre-built.
+# Nothing to unpack.
 
 %build
 # Build is done by the external script.
@@ -61,13 +61,15 @@ isolated virtualenv.
 %install
 rm -rf %{buildroot}
 
-mkdir -p %{buildroot}/opt/pdfsigner
-cp -a %{_sourcedir}/opt/pdfsigner/* %{buildroot}/opt/pdfsigner/
+mkdir -p %{buildroot}/opt/pdfsigner/lib
+cp -a %{_sourcedir}/opt/pdfsigner/lib/* %{buildroot}/opt/pdfsigner/lib/
 
 mkdir -p %{buildroot}/usr/bin
 cat > %{buildroot}/usr/bin/pdfsigner << 'LAUNCHER'
 #!/bin/bash
-exec /opt/pdfsigner/bin/python3 -m pdfsigner "$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="${SCRIPT_DIR}/opt/pdfsigner/lib:${PYTHONPATH:-}"
+exec python3 -m pdfsigner "$@"
 LAUNCHER
 chmod 755 %{buildroot}/usr/bin/pdfsigner
 

@@ -25,21 +25,25 @@ mkdir -p "${BUILDROOT}/DEBIAN" \
     "${BUILDROOT}/usr/share/doc/${APP_NAME}" \
     "${DIST_DIR}"
 
-echo "==> Creating virtualenv with all dependencies"
-python3 -m venv "${VENV_DIR}"
-"${VENV_DIR}/bin/pip" install --upgrade pip
-"${VENV_DIR}/bin/pip" install "${ROOT_DIR}"
+echo "==> Installing Python package to system"
+pip3 install --target "${VENV_DIR}/lib" "${ROOT_DIR}" 2>/dev/null || \
+pip install --target "${VENV_DIR}/lib" "${ROOT_DIR}"
 
 echo "==> Creating launcher script"
-cat > "${BUILDROOT}/usr/bin/${APP_NAME}" << LAUNCHER
+cat > "${BUILDROOT}/usr/bin/${APP_NAME}" << 'LAUNCHER'
 #!/bin/bash
-exec ${VENV_DIR}/bin/python3 -m pdfsigner "\$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="${SCRIPT_DIR}/opt/pdfsigner/lib:${PYTHONPATH:-}"
+exec python3 -m pdfsigner "$@"
 LAUNCHER
 chmod 755 "${BUILDROOT}/usr/bin/${APP_NAME}"
 
 echo "==> Installing icon"
 if [ -f "${ROOT_DIR}/packaging/pdfsigner.png" ]; then
-    cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/usr/share/icons/hicolor/256x256/apps/"
+    cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/usr/share/icons/hicolor/256x256/apps/pdfsigner.png"
+    echo "Icon installed"
+else
+    echo "WARNING: Icon file not found at ${ROOT_DIR}/packaging/pdfsigner.png"
 fi
 
 echo "==> Installing desktop file"
@@ -52,6 +56,7 @@ Icon=pdfsigner
 Terminal=false
 Type=Application
 Categories=Utility;Security;
+Keywords=pdf;sign;crypto;stamp;
 EOF
 
 echo "==> Installing documentation"
@@ -71,15 +76,13 @@ Architecture: amd64
 Installed-Size: ${INSTALLED_SIZE}
 Maintainer: shurshick <noreply@example.com>
 Homepage: https://github.com/shurshick/pdf-signer-linux
-Depends: python3 (>= 3.9)
+Depends: python3 (>= 3.9), python3-pyqt5
 Recommends: libcryptopro-java
 Description: Desktop PDF signing and visible stamp tool for Linux with CryptoPro CSP
- Self-contained application for signing PDF documents with CryptoPro CSP
+ Desktop application for signing PDF documents with CryptoPro CSP
  on Linux. Supports embedded CAdES-BES signatures via PKCS#11, visible
  stamps compliant with GOST R 7.0.97-2025, signature verification, and
  CryptoPro diagnostics.
- .
- Includes all Python dependencies in an isolated virtualenv.
 EOF
 
 echo "==> Building DEB"
