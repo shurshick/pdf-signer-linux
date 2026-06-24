@@ -50,9 +50,7 @@ Categories=Utility;Security;
 EOF
 
 mkdir -p %{buildroot}/usr/share/icons/hicolor/256x256/apps
-if [ -f %{_sourcedir}/pdfsigner.png ]; then
-    cp -f %{_sourcedir}/pdfsigner.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/
-fi
+cp -f %{_sourcedir}/pdfsigner.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/ 2>/dev/null || true
 
 mkdir -p %{buildroot}/usr/share/doc/pdfsigner
 cp -f %{_sourcedir}/README.md %{buildroot}/usr/share/doc/pdfsigner/ 2>/dev/null || true
@@ -61,7 +59,6 @@ cp -f %{_sourcedir}/README.md %{buildroot}/usr/share/doc/pdfsigner/ 2>/dev/null 
 /opt/pdfsigner/
 /usr/bin/pdfsigner
 /usr/share/applications/pdfsigner.desktop
-/usr/share/icons/hicolor/256x256/apps/pdfsigner.png
 /usr/share/doc/pdfsigner/
 
 %changelog
