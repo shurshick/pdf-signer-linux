@@ -14,15 +14,32 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pyqt5 libgl1-mesa-dev
+
+      - name: Install Python dependencies
         run: |
           pip install -e .
-          pip install pytest
+          pip install pytest build
 
       - name: Test
         run: pytest tests/ -v
 
-      - name: Build
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Build DEB
         run: |
-          pip install build
-          python -m build
+          sudo apt-get install -y dpkg-dev
+          VERSION=0.0.0-ci bash packaging/build-deb.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdfsigner-ci
+          path: |
+            dist/*.whl
+            dist/*.deb
+            dist/*.tar.gz

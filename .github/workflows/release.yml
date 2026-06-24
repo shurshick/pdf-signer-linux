@@ -21,16 +21,39 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install build tools
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pyqt5 libgl1-mesa-dev dpkg-dev rpm
+
+      - name: Install Python build tools
         run: pip install build
 
-      - name: Build
-        run: python -m build
+      - name: Build wheel
+        run: python -m build --wheel --outdir dist
+
+      - name: Build source distribution
+        run: python -m build --sdist --outdir dist
+
+      - name: Build DEB
+        run: |
+          VERSION=${{ inputs.version }} bash packaging/build-deb.sh
+
+      - name: Build RPM
+        run: |
+          VERSION=${{ inputs.version }} bash packaging/build-rpm.sh
+
+      - name: List artifacts
+        run: ls -lh dist/
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}
           name: pdfsigner ${{ inputs.version }} for Linux
-          files: dist/*
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
           generate_release_notes: true
