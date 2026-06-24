@@ -65,7 +65,7 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           if [[ "$VERSION" == v* ]]; then VERSION="${VERSION#v}"; fi
-          if [[ -z "$VERSION" || "$VERSION" == "main" ]]; then VERSION="1.0.0-ci"; fi
+          if [[ -z "$VERSION" || "$VERSION" == "main" ]]; then VERSION="1.0.0"; fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build Python packages
