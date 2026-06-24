@@ -3,10 +3,10 @@ set -euo pipefail
 
 APP_NAME="pdfsigner"
 VERSION="${VERSION:-1.0.0}"
-RELEASE="${RELEASE:-1}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist"
 BUILDROOT="${ROOT_DIR}/.rpmbuild"
+INSTALL_DIR="${BUILDROOT}/SOURCES/opt/${APP_NAME}"
 
 echo "==> Checking project files"
 for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/packaging/rpm/pdfsigner.spec"; do
@@ -18,13 +18,22 @@ done
 
 echo "==> Cleaning previous build output"
 rm -rf "${BUILDROOT}"
-mkdir -p "${BUILDROOT}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "${DIST_DIR}"
+mkdir -p "${BUILDROOT}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "${DIST_DIR}" "${INSTALL_DIR}/lib"
 
-echo "==> Installing Python package to temp dir"
-VENV_DIR="${BUILDROOT}/SOURCES/opt/${APP_NAME}"
-mkdir -p "${VENV_DIR}/lib"
-pip3 install --target "${VENV_DIR}/lib" "${ROOT_DIR}" 2>/dev/null || \
-pip install --target "${VENV_DIR}/lib" "${ROOT_DIR}"
+echo "==> Installing Python package (pure Python only, no .so files)"
+pip3 install --target "${INSTALL_DIR}/lib" --no-compile --no-deps "${ROOT_DIR}" 2>/dev/null || \
+pip install --target "${INSTALL_DIR}/lib" --no-compile --no-deps "${ROOT_DIR}"
+
+echo "==> Installing dependencies separately"
+pip3 install --target "${INSTALL_DIR}/lib" --no-compile \
+    pyhanko python-pkcs11 PyQt5 Pillow PyMuPDF cryptography 2>/dev/null || \
+pip install --target "${INSTALL_DIR}/lib" --no-compile \
+    pyhanko python-pkcs11 PyQt5 Pillow PyMuPDF cryptography
+
+echo "==> Removing .so files that cause dependency issues"
+find "${INSTALL_DIR}/lib" -name "*.so" -delete 2>/dev/null || true
+find "${INSTALL_DIR}/lib" -name "*.so.*" -delete 2>/dev/null || true
+find "${INSTALL_DIR}/lib" -name "*.dylib" -delete 2>/dev/null || true
 
 echo "==> Preparing RPM sources"
 cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
@@ -45,6 +54,10 @@ BuildArch:      x86_64
 
 Requires:       python3 >= 3.9
 Requires:       python3-pyqt5
+Requires:       python3-pyqt5-qtsvg
+Requires:       libgl1-mesa-glx or libGL
+Requires:       glib2
+Requires:       libX11
 
 %description
 Desktop application for signing PDF documents with CryptoPro CSP on Linux.
