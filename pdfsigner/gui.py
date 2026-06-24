@@ -28,6 +28,7 @@ from pdfsigner.stamp import (
     create_stamp_image, validate_stamp_size, build_stamp_text,
 )
 from pdfsigner.pdfstamp import apply_stamp
+from pdfsigner.stamp_editor import StampPreviewDialog
 from pdfsigner.diagnostics import run_diagnostics, format_report
 from pdfsigner.applog import log_info, log_error
 
@@ -37,7 +38,7 @@ class SignThread(QThread):
     finished = pyqtSignal(list)
     error = pyqtSignal(str)
 
-    def __init__(self, files, cert, profile, reason, output_dir, save_next_to, verify_after):
+    def __init__(self, files, cert, profile, reason, output_dir, save_next_to, verify_after, detached_mode):
         super().__init__()
         self.files = files
         self.cert = cert
@@ -46,6 +47,7 @@ class SignThread(QThread):
         self.output_dir = output_dir
         self.save_next_to = save_next_to
         self.verify_after = verify_after
+        self.detached_mode = detached_mode
 
     def run(self):
         results = []
@@ -57,39 +59,66 @@ class SignThread(QThread):
                 os.makedirs(output_dir, exist_ok=True)
 
                 base = os.path.splitext(os.path.basename(pdf_path))[0]
-                output_pdf = os.path.join(output_dir, f"{base}-stamped.pdf")
+                output_pdf = os.path.join(output_dir, f"{base}-signed.pdf")
                 counter = 2
                 while os.path.exists(output_pdf):
-                    output_pdf = os.path.join(output_dir, f"{base}-stamped-{counter}.pdf")
+                    output_pdf = os.path.join(output_dir, f"{base}-signed-{counter}.pdf")
                     counter += 1
 
                 sig_path = output_pdf + ".sig"
 
-                stamp_path = output_pdf + ".stamp.png"
-                create_stamp_image(
-                    stamp_path,
-                    owner=self.cert.subject_cn,
-                    issuer=self.cert.issuer_cn,
-                    serial=self.cert.serial,
-                    thumbprint=self.cert.thumbprint,
-                    reason=self.reason,
-                    valid_from=time.strftime("%d.%m.%Y"),
-                    valid_to=time.strftime("%d.%m.%Y"),
-                    signature_fn=os.path.basename(sig_path),
-                    profile=self.profile,
-                )
+                if self.detached_mode:
+                    stamp_path = output_pdf + ".stamp.png"
+                    create_stamp_image(
+                        stamp_path,
+                        owner=self.cert.subject_cn,
+                        issuer=self.cert.issuer_cn,
+                        serial=self.cert.serial,
+                        thumbprint=self.cert.thumbprint,
+                        reason=self.reason,
+                        valid_from=time.strftime("%d.%m.%Y"),
+                        valid_to=time.strftime("%d.%m.%Y"),
+                        signature_fn=os.path.basename(sig_path),
+                        profile=self.profile,
+                    )
+                    apply_stamp(pdf_path, output_pdf, stamp_path, self.profile.pages, self.profile)
+                    os.remove(stamp_path)
 
-                apply_stamp(pdf_path, output_pdf, stamp_path, self.profile.pages, self.profile)
-                os.remove(stamp_path)
+                    try:
+                        sign_detached(output_pdf, self.cert, sig_path)
+                        result = f"{os.path.basename(pdf_path)} -> {os.path.basename(output_pdf)}\nSignature: {os.path.basename(sig_path)}"
+                    except Exception as e:
+                        result = f"{os.path.basename(pdf_path)}\nSigning failed: {e}"
+                else:
+                    stamp_path = output_pdf + ".stamp.png"
+                    create_stamp_image(
+                        stamp_path,
+                        owner=self.cert.subject_cn,
+                        issuer=self.cert.issuer_cn,
+                        serial=self.cert.serial,
+                        thumbprint=self.cert.thumbprint,
+                        reason=self.reason,
+                        valid_from=time.strftime("%d.%m.%Y"),
+                        valid_to=time.strftime("%d.%m.%Y"),
+                        signature_fn="embedded",
+                        profile=self.profile,
+                    )
+                    apply_stamp(pdf_path, output_pdf, stamp_path, self.profile.pages, self.profile)
+                    os.remove(stamp_path)
 
-                try:
-                    sign_detached(output_pdf, self.cert, sig_path)
-                    result = f"{os.path.basename(pdf_path)} -> {os.path.basename(output_pdf)}\nSignature: {os.path.basename(sig_path)}"
-                except Exception as e:
-                    result = f"{os.path.basename(pdf_path)} -> {os.path.basename(output_pdf)}\nSigning failed: {e}"
+                    try:
+                        sign_embedded(output_pdf, self.cert, output_pdf)
+                        result = f"{os.path.basename(pdf_path)} -> {os.path.basename(output_pdf)}\nSignature: embedded"
+                    except Exception as e:
+                        result = f"{os.path.basename(pdf_path)}\nSigning failed: {e}"
 
-                if self.verify_after and os.path.exists(sig_path):
-                    vr = verify_signature(sig_path)
+                if self.verify_after:
+                    if self.detached_mode and os.path.exists(sig_path):
+                        vr = verify_signature(sig_path)
+                    elif not self.detached_mode and os.path.exists(output_pdf):
+                        vr = verify_signature(output_pdf)
+                    else:
+                        vr = {"status": "SKIPPED"}
                     result += f"\nVerification: {vr['status']}"
 
                 results.append(result)
@@ -203,8 +232,16 @@ class MainWindow(QMainWindow):
         opt_layout.addWidget(self.position_select, 3, 1)
 
         opt_layout.addWidget(QLabel(t("pages")), 4, 0)
-        self.pages_edit = QLineEdit(self.settings.stamp_profile.pages)
-        opt_layout.addWidget(self.pages_edit, 4, 1)
+        self.page_select = QComboBox()
+        self.page_select.addItems(["All pages", "First page", "Last page", "Specific page"])
+        self.page_select.currentTextChanged.connect(self._on_page_select_changed)
+        opt_layout.addWidget(self.page_select, 4, 1)
+
+        self.specific_page_spin = QSpinBox()
+        self.specific_page_spin.setRange(1, 9999)
+        self.specific_page_spin.setValue(1)
+        self.specific_page_spin.setEnabled(False)
+        opt_layout.addWidget(self.specific_page_spin, 4, 2)
 
         self.auto_place_check = QCheckBox(t("auto_place"))
         self.auto_place_check.setChecked(self.settings.stamp_profile.auto_place)
@@ -231,6 +268,10 @@ class MainWindow(QMainWindow):
         self.custom_y_spin.setEnabled(self.settings.stamp_profile.use_custom_position)
         opt_layout.addWidget(self.custom_y_spin, 8, 1)
 
+        stamp_editor_btn = QPushButton("Stamp Editor")
+        stamp_editor_btn.clicked.connect(self._open_stamp_editor)
+        opt_layout.addWidget(stamp_editor_btn, 8, 2)
+
         logo_row = QHBoxLayout()
         logo_row.addWidget(QLabel(t("logo")))
         self.logo_path_edit = QLineEdit(self.settings.stamp_profile.logo_path)
@@ -256,13 +297,17 @@ class MainWindow(QMainWindow):
         self.verify_after.setChecked(self.settings.verify_after_signing)
         opt_layout.addWidget(self.verify_after, 12, 0, 1, 3)
 
+        self.detached_check = QCheckBox(t("detached_sig"))
+        self.detached_check.setChecked(True)
+        opt_layout.addWidget(self.detached_check, 13, 0, 1, 3)
+
         export_btn = QPushButton(t("export_settings"))
         export_btn.clicked.connect(self._export_settings)
-        opt_layout.addWidget(export_btn, 13, 0)
+        opt_layout.addWidget(export_btn, 14, 0)
 
         import_btn = QPushButton(t("import_settings"))
         import_btn.clicked.connect(self._import_settings)
-        opt_layout.addWidget(import_btn, 13, 1)
+        opt_layout.addWidget(import_btn, 14, 1)
 
         options_group.setLayout(opt_layout)
         layout.addWidget(options_group)
@@ -273,10 +318,18 @@ class MainWindow(QMainWindow):
         sign_btn.setStyleSheet("font-weight: bold; padding: 8px 16px;")
         action_layout.addWidget(sign_btn)
 
+        verify_btn = QPushButton(t("verify_btn"))
+        verify_btn.clicked.connect(self._verify_files)
+        action_layout.addWidget(verify_btn)
+
         self.progress = QProgressBar()
         self.progress.setMinimum(0)
         self.progress.setMaximum(1)
         action_layout.addWidget(self.progress)
+
+        diag_btn = QPushButton(t("diagnostics"))
+        diag_btn.clicked.connect(self._open_diagnostics)
+        action_layout.addWidget(diag_btn)
 
         about_btn = QPushButton(t("about"))
         about_btn.clicked.connect(self._open_about)
@@ -434,11 +487,24 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, t("error"), str(e))
 
+    def _on_page_select_changed(self, text):
+        self.specific_page_spin.setEnabled(text == "Specific page")
+
+    def _get_pages_str(self):
+        choice = self.page_select.currentText()
+        if choice == "First page":
+            return "1"
+        elif choice == "Last page":
+            return "1-"
+        elif choice == "Specific page":
+            n = self.specific_page_spin.value()
+            return str(n)
+        return "1-"
+
     def _apply_settings_to_ui(self):
         self.verify_after.setChecked(self.settings.verify_after_signing)
         p = self.settings.stamp_profile
         self.position_select.setCurrentText(t(p.position.replace("-", "_")))
-        self.pages_edit.setText(p.pages)
         self.auto_place_check.setChecked(p.auto_place)
         self.custom_pos_check.setChecked(p.use_custom_position)
         self.custom_x_spin.setValue(p.custom_x * 25.4 / 72.0)
@@ -456,7 +522,7 @@ class MainWindow(QMainWindow):
         self.settings.stamp_profile.position = position_map.get(
             self.position_select.currentText(), "bottom-right"
         )
-        self.settings.stamp_profile.pages = self.pages_edit.text() or "1-"
+        self.settings.stamp_profile.pages = self._get_pages_str()
         self.settings.stamp_profile.auto_place = self.auto_place_check.isChecked()
         self.settings.stamp_profile.use_custom_position = self.custom_pos_check.isChecked()
         self.settings.stamp_profile.custom_x = self.custom_x_spin.value() * 72.0 / 25.4
@@ -491,6 +557,7 @@ class MainWindow(QMainWindow):
             self.pdf_files, self.selected_cert, profile,
             self.reason.text(), self.output_dir.text(),
             self.save_next.isChecked(), self.verify_after.isChecked(),
+            self.detached_check.isChecked(),
         )
         self.thread.progress.connect(self._on_progress)
         self.thread.finished.connect(self._on_sign_done)
@@ -525,3 +592,30 @@ class MainWindow(QMainWindow):
             f"License: AGPL-3.0-or-later"
         )
         QMessageBox.about(self, t("about_title"), text)
+
+    def _verify_files(self):
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Select files to verify", "",
+            "PDF files and signatures (*.pdf *.sig);;All files (*.*)"
+        )
+        if not paths:
+            return
+        reports = []
+        for p in paths:
+            reports.append(verify_signature(p))
+        report_text = format_verification_report(reports)
+        QMessageBox.information(self, "Verification Result", report_text)
+
+    def _open_diagnostics(self):
+        report = run_diagnostics(APP_VERSION)
+        text = format_report(report)
+        QMessageBox.information(self, "Diagnostics", text)
+
+    def _open_stamp_editor(self):
+        profile = self._get_profile()
+        cert_name = self.selected_cert.subject_cn if self.selected_cert else ""
+        reason = self.reason.text()
+        dialog = StampPreviewDialog(profile, cert_name, reason, self)
+        dialog.exec_()
+        self.profile_select.setCurrentText(t(profile.name))
+        self.position_select.setCurrentText(t(profile.position.replace("-", "_")))
