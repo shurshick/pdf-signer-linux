@@ -20,14 +20,36 @@ echo "==> Cleaning previous build output"
 rm -rf "${BUILDROOT}"
 mkdir -p "${BUILDROOT}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "${DIST_DIR}"
 
-echo "==> Building Python wheel"
+echo "==> Installing Python dependencies"
+pip install pyinstaller 2>/dev/null || true
+pip install -e "${ROOT_DIR}" 2>/dev/null || pip install "${ROOT_DIR}" 2>/dev/null || true
+
+echo "==> Building self-contained binary with PyInstaller"
 cd "${ROOT_DIR}"
-pip install build 2>/dev/null || true
-python3 -m build --wheel --outdir "${BUILDROOT}/SOURCES"
+pyinstaller \
+    --onefile \
+    --name "${APP_NAME}" \
+    --distpath "${BUILDROOT}/SOURCES" \
+    --workpath "${ROOT_DIR}/build" \
+    --specpath "${ROOT_DIR}" \
+    --hidden-import pdfsigner \
+    --hidden-import pdfsigner.gui \
+    --hidden-import pdfsigner.signer \
+    --hidden-import pdfsigner.stamp \
+    --hidden-import pdfsigner.pdfstamp \
+    --hidden-import pdfsigner.certstore \
+    --hidden-import pdfsigner.settings \
+    --hidden-import pdfsigner.diagnostics \
+    --hidden-import pdfsigner.applog \
+    --collect-all pdfsigner \
+    --noconfirm \
+    pdfsigner/main.py
 
 echo "==> Preparing RPM sources"
-cp "${ROOT_DIR}/README.md" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
 cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
+cp "${ROOT_DIR}/README.md" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
+cp "${ROOT_DIR}/LICENSE" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
+cp "${ROOT_DIR}/packaging/pdfsigner.desktop" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
 
 echo "==> Generating SPEC"
 cp "${ROOT_DIR}/packaging/rpm/pdfsigner.spec" "${BUILDROOT}/SPECS/pdfsigner.spec"
@@ -47,5 +69,5 @@ find "${BUILDROOT}/RPMS" -type f -name "*.rpm" -exec cp -f {} "${DIST_DIR}/" \;
 
 echo "==> Done"
 echo "Version: ${VERSION}"
-echo "RPM packages:"
+echo "RPM package:"
 ls -lh "${DIST_DIR}"/*.rpm

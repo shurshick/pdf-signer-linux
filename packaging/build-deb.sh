@@ -22,33 +22,47 @@ mkdir -p "${BUILDROOT}/DEBIAN" \
     "${BUILDROOT}/usr/share/applications" \
     "${BUILDROOT}/usr/share/icons/hicolor/256x256/apps" \
     "${BUILDROOT}/usr/share/doc/${APP_NAME}" \
-    "${BUILDROOT}/opt/${APP_NAME}" \
     "${DIST_DIR}"
 
-echo "==> Building Python wheel"
+echo "==> Installing Python dependencies"
+pip install pyinstaller 2>/dev/null || true
+pip install -e "${ROOT_DIR}" 2>/dev/null || pip install "${ROOT_DIR}" 2>/dev/null || true
+
+echo "==> Building self-contained binary with PyInstaller"
 cd "${ROOT_DIR}"
-pip install build 2>/dev/null || true
-python3 -m build --wheel --outdir "${DIST_DIR}"
+pyinstaller \
+    --onefile \
+    --name "${APP_NAME}" \
+    --distpath "${DIST_DIR}" \
+    --workpath "${ROOT_DIR}/build" \
+    --specpath "${ROOT_DIR}" \
+    --hidden-import pdfsigner \
+    --hidden-import pdfsigner.gui \
+    --hidden-import pdfsigner.signer \
+    --hidden-import pdfsigner.stamp \
+    --hidden-import pdfsigner.pdfstamp \
+    --hidden-import pdfsigner.certstore \
+    --hidden-import pdfsigner.settings \
+    --hidden-import pdfsigner.diagnostics \
+    --hidden-import pdfsigner.applog \
+    --collect-all pdfsigner \
+    --noconfirm \
+    pdfsigner/main.py
 
-echo "==> Installing package files"
-cp "${DIST_DIR}"/*.whl "${BUILDROOT}/opt/${APP_NAME}/"
-cp "${DIST_DIR}"/*.tar.gz "${BUILDROOT}/opt/${APP_NAME}/" 2>/dev/null || true
-
-cat > "${BUILDROOT}/usr/bin/${APP_NAME}" << 'LAUNCHER'
-#!/bin/bash
-pip install --user /opt/pdfsigner/*.whl 2>/dev/null
-exec python3 -m pdfsigner "$@"
-LAUNCHER
+echo "==> Installing application binary"
+cp "${DIST_DIR}/${APP_NAME}" "${BUILDROOT}/usr/bin/${APP_NAME}"
 chmod 755 "${BUILDROOT}/usr/bin/${APP_NAME}"
 
+echo "==> Installing icon"
 if [ -f "${ROOT_DIR}/packaging/pdfsigner.png" ]; then
     cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/usr/share/icons/hicolor/256x256/apps/"
 fi
 
+echo "==> Installing desktop file"
 cat > "${BUILDROOT}/usr/share/applications/${APP_NAME}.desktop" << 'EOF'
 [Desktop Entry]
 Name=PDF Signer Linux
-Comment=PDF signing and visible stamp tool
+Comment=PDF signing and visible stamp tool for Linux with CryptoPro CSP
 Exec=pdfsigner
 Icon=pdfsigner
 Terminal=false
@@ -56,23 +70,27 @@ Type=Application
 Categories=Utility;Security;
 EOF
 
+echo "==> Installing documentation"
 cp "${ROOT_DIR}/README.md" "${BUILDROOT}/usr/share/doc/${APP_NAME}/" 2>/dev/null || true
+cp "${ROOT_DIR}/LICENSE" "${BUILDROOT}/usr/share/doc/${APP_NAME}/COPYING" 2>/dev/null || true
 
+echo "==> Creating DEB control file"
 cat > "${BUILDROOT}/DEBIAN/control" << EOF
 Package: ${APP_NAME}
 Version: ${VERSION}
 Section: utils
 Priority: optional
 Architecture: amd64
+Installed-Size: $(du -sk "${BUILDROOT}" | cut -f1)
 Maintainer: shurshick <noreply@example.com>
 Homepage: https://github.com/shurshick/pdf-signer-linux
-Depends: python3 (>= 3.9), python3-pyqt5, python3-pip
+Depends: libc6, libgl1-mesa-glx | libgl1, libglib2.0-0, libx11-6
 Recommends: libcryptopro-java
 Description: Desktop PDF signing and visible stamp tool for Linux with CryptoPro CSP
- Desktop application for signing PDF documents with CryptoPro CSP on Linux.
- Supports embedded CAdES-BES signatures via PKCS#11, visible stamps
- compliant with GOST R 7.0.97-2025, signature verification, and
- CryptoPro diagnostics.
+ Self-contained application for signing PDF documents with CryptoPro CSP
+ on Linux. Supports embedded CAdES-BES signatures via PKCS#11, visible
+ stamps compliant with GOST R 7.0.97-2025, signature verification, and
+ CryptoPro diagnostics. No Python installation required.
 EOF
 
 echo "==> Building DEB"
@@ -80,5 +98,5 @@ dpkg-deb --build --root-owner-group "${BUILDROOT}" "${DIST_DIR}/${APP_NAME}_${VE
 
 echo "==> Done"
 echo "Version: ${VERSION}"
-echo "DEB packages:"
+echo "DEB package:"
 ls -lh "${DIST_DIR}"/*.deb

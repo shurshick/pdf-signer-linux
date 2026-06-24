@@ -22,13 +22,31 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install .
-          pip install pytest build
+          pip install pytest build pyinstaller
 
       - name: Test
         run: pytest tests/ -v
 
       - name: Build wheel
         run: python -m build --wheel
+
+      - name: Build self-contained binary
+        run: |
+          pyinstaller \
+            --onefile \
+            --name pdfsigner \
+            --hidden-import pdfsigner \
+            --hidden-import pdfsigner.gui \
+            --hidden-import pdfsigner.signer \
+            --hidden-import pdfsigner.stamp \
+            --hidden-import pdfsigner.pdfstamp \
+            --hidden-import pdfsigner.certstore \
+            --hidden-import pdfsigner.settings \
+            --hidden-import pdfsigner.diagnostics \
+            --hidden-import pdfsigner.applog \
+            --collect-all pdfsigner \
+            --noconfirm \
+            pdfsigner/main.py
 
       - name: Build DEB
         run: |
@@ -40,6 +58,7 @@ jobs:
         with:
           name: pdfsigner-ci
           path: |
+            dist/pdfsigner
             dist/*.whl
             dist/*.deb
             dist/*.tar.gz
