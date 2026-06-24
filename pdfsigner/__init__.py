@@ -1,6 +1,6 @@
 import os
 
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.1.0"
 APP_NAME = "PDF Signer Linux"
 APP_COPYRIGHT = "Copyright (c) 2026 shurshick"
 APP_PROJECT_URL = "https://github.com/shurshick/pdf-signer-linux"
