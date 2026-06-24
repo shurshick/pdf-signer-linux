@@ -17,7 +17,7 @@ for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/packaging/rpm/pdfsigner.spec"
 done
 
 echo "==> Cleaning previous build output"
-rm -rf "${BUILDROOT}" "${DIST_DIR}"
+rm -rf "${BUILDROOT}"
 mkdir -p "${BUILDROOT}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "${DIST_DIR}"
 
 echo "==> Building Python wheel"

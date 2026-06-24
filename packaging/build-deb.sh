@@ -16,7 +16,7 @@ for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/README.md"; do
 done
 
 echo "==> Cleaning previous build output"
-rm -rf "${BUILDROOT}" "${DIST_DIR}"
+rm -rf "${BUILDROOT}"
 mkdir -p "${BUILDROOT}/DEBIAN" \
     "${BUILDROOT}/usr/bin" \
     "${BUILDROOT}/usr/share/applications" \
