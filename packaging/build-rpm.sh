@@ -51,7 +51,7 @@ cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/SOURCES/packaging/"
 cp "${ROOT_DIR}/README.md" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
 cp "${ROOT_DIR}/LICENSE" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
 
-echo "==> Generating SPEC (matching Go project format)"
+echo "==> Generating SPEC"
 cat > "${BUILDROOT}/SPECS/pdfsigner.spec" << 'SPEC'
 Name:           pdfsigner
 Version:        VERSION_PLACEHOLDER
@@ -62,8 +62,10 @@ License:        AGPLv3
 URL:            https://github.com/shurshick/pdf-signer-linux
 BuildArch:      x86_64
 
-Requires:       /opt/cprocsp/bin/amd64/certmgr
-Requires:       /opt/cprocsp/bin/amd64/csptest
+AutoReq:        no
+AutoProv:       no
+
+Recommends:     cprocsp-pki-plugin
 
 %description
 Desktop application for signing PDF documents with CryptoPro CSP on Linux.
@@ -83,11 +85,14 @@ rm -rf %{buildroot}
 install -D -m 0755 %{_sourcedir}/pdfsigner %{buildroot}/usr/bin/pdfsigner
 install -D -m 0644 %{_sourcedir}/packaging/pdfsigner.desktop %{buildroot}/usr/share/applications/pdfsigner.desktop
 install -D -m 0644 %{_sourcedir}/packaging/pdfsigner.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/pdfsigner.png
+install -D -m 0644 %{_sourcedir}/README.md %{buildroot}/usr/share/doc/pdfsigner/README.md 2>/dev/null || true
+install -D -m 0644 %{_sourcedir}/LICENSE %{buildroot}/usr/share/doc/pdfsigner/COPYING 2>/dev/null || true
 
 %files
 /usr/bin/pdfsigner
 /usr/share/applications/pdfsigner.desktop
 /usr/share/icons/hicolor/256x256/apps/pdfsigner.png
+/usr/share/doc/pdfsigner/
 
 %changelog
 * Sun Jun 22 2026 shurshick <noreply@example.com> - VERSION_PLACEHOLDER-1

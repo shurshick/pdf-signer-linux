@@ -7,7 +7,8 @@ License:        AGPLv3
 URL:            https://github.com/shurshick/pdf-signer-linux
 BuildArch:      x86_64
 
-%define __os_install_post /bin/true
+AutoReq:        no
+AutoProv:       no
 
 %description
 Self-contained desktop application for signing PDF documents with CryptoPro
