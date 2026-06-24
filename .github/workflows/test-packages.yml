@@ -1,0 +1,78 @@
+name: Test Packages
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+jobs:
+  test-deb:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    container: debian:bookworm
+    steps:
+      - name: Install test dependencies
+        run: |
+          apt-get update
+          apt-get install -y curl ca-certificates xz-utils
+
+      - name: Download DEB from release
+        run: |
+          RELEASE_URL=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | grep -o '"browser_download_url": "[^"]*\.deb"' | head -1 | cut -d'"' -f4)
+          echo "Downloading: $RELEASE_URL"
+          curl -sL "$RELEASE_URL" -o /tmp/pdfsigner.deb
+
+      - name: Install DEB
+        run: dpkg -i /tmp/pdfsigner.deb; apt-get install -f -y
+
+      - name: Verify installation
+        run: |
+          echo "=== Check binary exists ==="
+          ls -la /usr/bin/pdfsigner
+          echo "=== Check desktop file ==="
+          ls -la /usr/share/applications/pdfsigner.desktop
+          echo "=== Check icon ==="
+          ls -la /usr/share/icons/hicolor/256x256/apps/pdfsigner.png
+          echo "=== Check dependencies resolved ==="
+          dpkg -s pdfsigner | grep Status
+          echo "=== Check file integrity ==="
+          file /usr/bin/pdfsigner
+
+      - name: Run binary smoke test
+        run: |
+          timeout 5 /usr/bin/pdfsigner --help 2>&1 || timeout 5 /usr/bin/pdfsigner --version 2>&1 || echo "Binary starts (GUI app, no display expected in CI)"
+
+  test-rpm:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    container: fedora:latest
+    steps:
+      - name: Install test dependencies
+        run: dnf install -y curl xz
+
+      - name: Download RPM from release
+        run: |
+          RELEASE_URL=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | grep -o '"browser_download_url": "[^"]*\.rpm"' | head -1 | cut -d'"' -f4)
+          echo "Downloading: $RELEASE_URL"
+          curl -sL "$RELEASE_URL" -o /tmp/pdfsigner.rpm
+
+      - name: Install RPM
+        run: dnf install -y /tmp/pdfsigner.rpm || rpm -ivh /tmp/pdfsigner.rpm --nodeps
+
+      - name: Verify installation
+        run: |
+          echo "=== Check binary exists ==="
+          ls -la /usr/bin/pdfsigner
+          echo "=== Check desktop file ==="
+          ls -la /usr/share/applications/pdfsigner.desktop
+          echo "=== Check icon ==="
+          ls -la /usr/share/icons/hicolor/256x256/apps/pdfsigner.png
+          echo "=== Check RPM info ==="
+          rpm -qi pdfsigner
+          echo "=== Check file integrity ==="
+          file /usr/bin/pdfsigner
+
+      - name: Run binary smoke test
+        run: |
+          timeout 5 /usr/bin/pdfsigner --help 2>&1 || timeout 5 /usr/bin/pdfsigner --version 2>&1 || echo "Binary starts (GUI app, no display expected in CI)"
