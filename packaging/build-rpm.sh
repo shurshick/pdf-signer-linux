@@ -45,6 +45,7 @@ pyinstaller \
     pdfsigner/main.py
 
 echo "==> Preparing RPM sources (like Go project)"
+mkdir -p "${BUILDROOT}/SOURCES/packaging"
 cp "${ROOT_DIR}/packaging/pdfsigner.desktop" "${BUILDROOT}/SOURCES/packaging/"
 cp "${ROOT_DIR}/packaging/pdfsigner.png" "${BUILDROOT}/SOURCES/packaging/"
 cp "${ROOT_DIR}/README.md" "${BUILDROOT}/SOURCES/" 2>/dev/null || true
