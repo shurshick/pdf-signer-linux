@@ -38,10 +38,12 @@ jobs:
       - name: Build DEB
         run: |
           VERSION=${{ inputs.version }} bash packaging/build-deb.sh
+        working-directory: ${{ github.workspace }}
 
       - name: Build RPM
         run: |
           VERSION=${{ inputs.version }} bash packaging/build-rpm.sh
+        working-directory: ${{ github.workspace }}
 
       - name: List artifacts
         run: ls -lh dist/
