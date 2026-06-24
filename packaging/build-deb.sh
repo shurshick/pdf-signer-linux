@@ -67,7 +67,7 @@ Architecture: amd64
 Maintainer: shurshick <noreply@example.com>
 Homepage: https://github.com/shurshick/pdf-signer-linux
 Depends: python3 (>= 3.9), python3-pyqt5, python3-pip
-Recommends: /opt/cprocsp/bin/amd64/certmgr, /opt/cprocsp/bin/amd64/csptest
+Recommends: libcryptopro-java
 Description: Desktop PDF signing and visible stamp tool for Linux with CryptoPro CSP
  Desktop application for signing PDF documents with CryptoPro CSP on Linux.
  Supports embedded CAdES-BES signatures via PKCS#11, visible stamps
