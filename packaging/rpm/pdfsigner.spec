@@ -26,8 +26,8 @@ CryptoPro diagnostics.
 %install
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/opt/pdfsigner
-cp -f %{_sourcedir}/dist/*.whl %{buildroot}/opt/pdfsigner/
-cp -f %{_sourcedir}/dist/*.tar.gz %{buildroot}/opt/pdfsigner/
+cp -f %{_sourcedir}/*.whl %{buildroot}/opt/pdfsigner/
+cp -f %{_sourcedir}/*.tar.gz %{buildroot}/opt/pdfsigner/ 2>/dev/null || true
 
 mkdir -p %{buildroot}/usr/bin
 cat > %{buildroot}/usr/bin/pdfsigner << 'EOF'
