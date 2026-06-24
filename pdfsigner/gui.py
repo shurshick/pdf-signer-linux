@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from typing import Optional
 
@@ -20,8 +21,9 @@ from pdfsigner.settings import (
 from pdfsigner.certstore import CertInfo, load_certificates
 from pdfsigner.signer import sign_detached, sign_embedded, verify_signature, format_verification_report
 from pdfsigner.stamp import (
-    create_stamp_image, apply_stamp, validate_stamp_size, build_stamp_text,
+    create_stamp_image, validate_stamp_size, build_stamp_text,
 )
+from pdfsigner.pdfstamp import apply_stamp
 from pdfsigner.diagnostics import run_diagnostics, format_report
 from pdfsigner.applog import log_info, log_error
 
@@ -92,9 +94,6 @@ class SignThread(QThread):
             self.finished.emit(results)
         except Exception as e:
             self.error.emit(str(e))
-
-
-import os
 
 
 class MainWindow(QMainWindow):

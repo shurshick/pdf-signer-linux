@@ -66,6 +66,8 @@ AutoReq:        no
 AutoProv:       no
 
 Recommends:     cprocsp-pki-plugin
+Recommends:     mesa-libGL
+Recommends:     mesa-libEGL
 
 %description
 Desktop application for signing PDF documents with CryptoPro CSP on Linux.
