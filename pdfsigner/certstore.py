@@ -14,6 +14,7 @@ class CertInfo:
     provider: str = ""
     label: str = ""
     has_private_key: bool = True
+    not_after: str = ""
     pkcs11_session: object = None
     pkcs11_key_label: str = ""
 
@@ -136,6 +137,10 @@ def _parse_certmgr_output(output: str) -> List[CertInfo]:
             current.provider = _after_colon(line).strip()
         elif "private" in line.lower() or "закрытый" in line.lower() or "key" in line.lower():
             current.has_private_key = True
+        elif "valid" in line.lower() or "срок" in line.lower() or "expire" in line.lower():
+            val = _after_colon(line).strip()
+            if val and (not current.not_after or "to" in line.lower() or "до" in line):
+                current.not_after = val
     if current and current.subject_cn:
         current.label = current.display_name
         certs.append(current)

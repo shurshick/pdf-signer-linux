@@ -387,7 +387,7 @@ class MainWindow(QMainWindow):
             for row, cert in enumerate(certs):
                 self.cert_table.setItem(row, 0, QTableWidgetItem(cert.subject_cn))
                 self.cert_table.setItem(row, 1, QTableWidgetItem("uMy"))
-                self.cert_table.setItem(row, 2, QTableWidgetItem(""))
+                self.cert_table.setItem(row, 2, QTableWidgetItem(cert.not_after))
                 thumb_text = cert.thumbprint[:16] + "..." if len(cert.thumbprint) > 16 else cert.thumbprint
                 self.cert_table.setItem(row, 3, QTableWidgetItem(thumb_text))
                 pk_text = t("has_private_key") if cert.has_private_key else t("no_private_key")

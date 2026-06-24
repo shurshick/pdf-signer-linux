@@ -39,4 +39,5 @@ htmlcov/
 *.nsi
 *.nsis
 artifacts/
+build_artifacts/
 packaging/deb/pdfsigner_*/
