@@ -15,7 +15,7 @@ jobs:
       - name: Install test dependencies
         run: |
           apt-get update
-          apt-get install -y curl ca-certificates xz-utils
+          apt-get install -y curl ca-certificates xz-utils file
 
       - name: Download DEB from release
         run: |
@@ -49,7 +49,7 @@ jobs:
     container: fedora:latest
     steps:
       - name: Install test dependencies
-        run: dnf install -y curl xz
+        run: dnf install -y curl xz file
 
       - name: Download RPM from release
         run: |

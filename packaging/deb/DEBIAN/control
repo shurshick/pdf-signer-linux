@@ -5,7 +5,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: shurshick <noreply@example.com>
 Homepage: https://github.com/shurshick/pdf-signer-linux
-Depends: libc6, libgl1-mesa-glx | libGL, libglib2.0-0, libx11-6, libxcb1, libxcb-xinerama0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-shape0, libxkbcommon0, libxkbcommon-x11-0
+Depends: libc6, libgl1 | libgl1-mesa-glx | libGL, libglib2.0-0, libx11-6, libxcb1, libxcb-xinerama0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-shape0, libxkbcommon0, libxkbcommon-x11-0
 Recommends: libcryptopro-java
 Description: Desktop PDF signing and visible stamp tool for Linux with CryptoPro CSP
  Desktop application for signing PDF documents with CryptoPro CSP
