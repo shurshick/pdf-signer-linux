@@ -7,6 +7,8 @@ License:        AGPLv3
 URL:            https://github.com/shurshick/pdf-signer-linux
 BuildArch:      x86_64
 
+%define __os_install_post /bin/true
+
 %description
 Self-contained desktop application for signing PDF documents with CryptoPro
 CSP on Linux. Supports embedded CAdES-BES signatures via PKCS#11, visible
@@ -42,6 +44,6 @@ cp -f %{_sourcedir}/LICENSE %{buildroot}/usr/share/doc/pdfsigner/COPYING 2>/dev/
 /usr/share/doc/pdfsigner/
 
 %changelog
-* Sun Jun 23 2026 shurshick <noreply@example.com> - 1.0.0-1
+* Sun Jun 22 2026 shurshick <noreply@example.com> - 1.0.0-1
 - Initial release with self-contained binary, embedded PDF signing,
   GOST-compliant stamps, signature verification, and diagnostics.
