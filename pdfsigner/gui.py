@@ -8,12 +8,14 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QComboBox, QCheckBox, QFileDialog,
     QMessageBox, QProgressBar, QGroupBox, QListWidget, QTextEdit,
     QSplitter, QTabWidget, QSpinBox, QDoubleSpinBox, QSlider,
-    QFormLayout, QFrame,
+    QFormLayout, QFrame, QTableWidget, QTableWidgetItem, QHeaderView,
+    QAbstractItemView,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
 
 from pdfsigner import APP_VERSION, APP_NAME, APP_PROJECT_URL, APP_COPYRIGHT
+from pdfsigner.i18n import t
 from pdfsigner.settings import (
     ApplicationSettings, StampProfile, BUILT_IN_PROFILES,
     load_settings, save_settings, export_settings, import_settings,
@@ -54,10 +56,10 @@ class SignThread(QThread):
                 os.makedirs(output_dir, exist_ok=True)
 
                 base = os.path.splitext(os.path.basename(pdf_path))[0]
-                output_pdf = os.path.join(output_dir, f"{base}_stamped.pdf")
+                output_pdf = os.path.join(output_dir, f"{base}-stamped.pdf")
                 counter = 2
                 while os.path.exists(output_pdf):
-                    output_pdf = os.path.join(output_dir, f"{base}_stamped_{counter}.pdf")
+                    output_pdf = os.path.join(output_dir, f"{base}-stamped-{counter}.pdf")
                     counter += 1
 
                 sig_path = output_pdf + ".sig"
@@ -103,7 +105,7 @@ class MainWindow(QMainWindow):
         self.pdf_files = []
         self.selected_cert = None
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(900, 650)
         self._init_ui()
         self._load_certs()
 
@@ -111,188 +113,219 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
+        layout.setSpacing(8)
 
-        files_group = QGroupBox("PDF Files")
+        files_group = QGroupBox(t("files"))
         files_layout = QVBoxLayout()
         btn_row = QHBoxLayout()
-        add_btn = QPushButton("Add PDFs")
+        add_btn = QPushButton(t("add_files"))
         add_btn.clicked.connect(self._add_files)
-        clear_btn = QPushButton("Clear")
+        remove_btn = QPushButton(t("remove_file"))
+        remove_btn.clicked.connect(self._remove_file)
+        clear_btn = QPushButton(t("clear"))
         clear_btn.clicked.connect(self._clear_files)
         btn_row.addWidget(add_btn)
+        btn_row.addWidget(remove_btn)
         btn_row.addWidget(clear_btn)
+        btn_row.addStretch()
         files_layout.addLayout(btn_row)
         self.file_list = QListWidget()
-        self.file_list.setMaximumHeight(100)
+        self.file_list.setMaximumHeight(80)
         files_layout.addWidget(self.file_list)
-        self.file_summary = QLabel("Selected PDFs: 0")
+        self.file_summary = QLabel(t("select_pdf"))
         files_layout.addWidget(self.file_summary)
         files_group.setLayout(files_layout)
         layout.addWidget(files_group)
 
-        options_group = QGroupBox("Options")
+        cert_group = QGroupBox(t("certificate"))
+        cert_layout = QVBoxLayout()
+
+        self.cert_table = QTableWidget()
+        self.cert_table.setColumnCount(4)
+        self.cert_table.setHorizontalHeaderLabels([t("cn"), t("store"), t("valid_to"), t("thumbprint")])
+        self.cert_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.cert_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.cert_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.cert_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.cert_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.cert_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.cert_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.cert_table.verticalHeader().setVisible(False)
+        self.cert_table.setMaximumHeight(120)
+        self.cert_table.clicked.connect(self._on_cert_clicked)
+        cert_layout.addWidget(self.cert_table)
+
+        cert_btn_row = QHBoxLayout()
+        refresh_btn = QPushButton(t("refresh"))
+        refresh_btn.clicked.connect(self._load_certs)
+        cert_btn_row.addWidget(refresh_btn)
+        cert_btn_row.addStretch()
+        cert_layout.addLayout(cert_btn_row)
+
+        cert_group.setLayout(cert_layout)
+        layout.addWidget(cert_group)
+
+        options_group = QGroupBox(t("options"))
         opt_layout = QGridLayout()
 
-        opt_layout.addWidget(QLabel("Output folder:"), 0, 0)
+        opt_layout.addWidget(QLabel(t("output_folder")), 0, 0)
         self.output_dir = QLineEdit(os.path.expanduser("~/Documents/Signed PDFs"))
         opt_layout.addWidget(self.output_dir, 0, 1)
-        browse_btn = QPushButton("Browse")
+        browse_btn = QPushButton(t("browse"))
         browse_btn.clicked.connect(self._browse_output)
         opt_layout.addWidget(browse_btn, 0, 2)
 
-        self.save_next = QCheckBox("Save next to source PDF")
-        self.save_next.setChecked(True)
-        opt_layout.addWidget(self.save_next, 1, 0, 1, 3)
+        opt_layout.addWidget(QLabel(t("signing_reason")), 1, 0)
+        self.reason = QLineEdit(t("default_reason"))
+        opt_layout.addWidget(self.reason, 1, 1, 1, 2)
 
-        self.verify_after = QCheckBox("Verify after signing")
-        self.verify_after.setChecked(self.settings.verify_after_signing)
-        opt_layout.addWidget(self.verify_after, 2, 0, 1, 3)
-
-        opt_layout.addWidget(QLabel("Signing reason:"), 3, 0)
-        self.reason = QLineEdit("Signed with PDF Signer Linux")
-        opt_layout.addWidget(self.reason, 3, 1, 1, 2)
-
-        opt_layout.addWidget(QLabel("Scale:"), 4, 0)
-        self.scale = QLineEdit(str(self.settings.stamp_profile.scale))
-        opt_layout.addWidget(self.scale, 4, 1)
-
-        opt_layout.addWidget(QLabel("Stamp profile:"), 5, 0)
+        opt_layout.addWidget(QLabel(t("stamp_profile")), 2, 0)
         self.profile_select = QComboBox()
-        self.profile_select.addItems(["minimal", "standard", "detailed"])
-        self.profile_select.setCurrentText(self.settings.stamp_profile.name)
+        self.profile_select.addItems([t("minimal"), t("standard"), t("detailed")])
+        self.profile_select.setCurrentText(t(self.settings.stamp_profile.name))
         self.profile_select.currentTextChanged.connect(self._on_profile_change)
-        opt_layout.addWidget(self.profile_select, 5, 1)
+        opt_layout.addWidget(self.profile_select, 2, 1)
 
-        opt_layout.addWidget(QLabel("Position:"), 6, 0)
+        opt_layout.addWidget(QLabel(t("position")), 3, 0)
         self.position_select = QComboBox()
-        self.position_select.addItems(["bottom-right", "bottom-left", "top-right", "top-left"])
-        self.position_select.setCurrentText(self.settings.stamp_profile.position)
-        opt_layout.addWidget(self.position_select, 6, 1)
+        self.position_select.addItems([t("bottom_right"), t("bottom_left"), t("top_right"), t("top_left")])
+        self.position_select.setCurrentText(t(self.settings.stamp_profile.position))
+        opt_layout.addWidget(self.position_select, 3, 1)
 
-        opt_layout.addWidget(QLabel("Pages:"), 7, 0)
+        opt_layout.addWidget(QLabel(t("pages")), 4, 0)
         self.pages_edit = QLineEdit(self.settings.stamp_profile.pages)
-        opt_layout.addWidget(self.pages_edit, 7, 1)
+        opt_layout.addWidget(self.pages_edit, 4, 1)
+
+        self.save_next = QCheckBox(t("save_next_to"))
+        self.save_next.setChecked(True)
+        opt_layout.addWidget(self.save_next, 5, 0, 1, 3)
+
+        self.verify_after = QCheckBox(t("verify_after"))
+        self.verify_after.setChecked(self.settings.verify_after_signing)
+        opt_layout.addWidget(self.verify_after, 6, 0, 1, 3)
 
         options_group.setLayout(opt_layout)
         layout.addWidget(options_group)
 
-        cert_group = QGroupBox("Certificate")
-        cert_layout = QVBoxLayout()
-        self.cert_combo = QComboBox()
-        self.cert_combo.currentTextChanged.connect(self._on_cert_change)
-        cert_layout.addWidget(self.cert_combo)
-        self.cert_info = QLabel("No certificate selected")
-        self.cert_info.setWordWrap(True)
-        cert_layout.addWidget(self.cert_info)
-        refresh_btn = QPushButton("Refresh")
-        refresh_btn.clicked.connect(self._load_certs)
-        cert_layout.addWidget(refresh_btn)
-        cert_group.setLayout(cert_layout)
-        layout.addWidget(cert_group)
-
         action_layout = QHBoxLayout()
-        sign_btn = QPushButton("Sign and Stamp")
+        sign_btn = QPushButton(t("sign"))
         sign_btn.clicked.connect(self._sign)
         sign_btn.setStyleSheet("font-weight: bold; padding: 8px 16px;")
         action_layout.addWidget(sign_btn)
 
-        verify_btn = QPushButton("Verify Signature")
-        verify_btn.clicked.connect(self._verify)
-        action_layout.addWidget(verify_btn)
+        self.progress = QProgressBar()
+        self.progress.setMinimum(0)
+        self.progress.setMaximum(1)
+        action_layout.addWidget(self.progress)
 
-        stamp_btn = QPushButton("Stamp Editor")
-        stamp_btn.clicked.connect(self._open_stamp_editor)
-        action_layout.addWidget(stamp_btn)
-
-        diag_btn = QPushButton("Diagnostics")
-        diag_btn.clicked.connect(self._open_diagnostics)
-        action_layout.addWidget(diag_btn)
-
-        about_btn = QPushButton("About")
+        about_btn = QPushButton(t("about"))
         about_btn.clicked.connect(self._open_about)
         action_layout.addWidget(about_btn)
 
         layout.addLayout(action_layout)
 
-        self.progress = QProgressBar()
-        self.progress.setVisible(False)
-        layout.addWidget(self.progress)
-
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel(t("ready"))
         layout.addWidget(self.status_label)
 
     def _load_certs(self):
-        self.cert_combo.clear()
-        self.status_label.setText("Loading certificates...")
+        self.cert_table.setRowCount(0)
+        self.selected_cert = None
+        self.status_label.setText(t("loading_certs"))
         try:
             certs = load_certificates()
-            for c in certs:
-                self.cert_combo.addItem(c.display_name, c)
-            self.status_label.setText(f"Found {len(certs)} certificate(s)")
+            self.cert_table.setRowCount(len(certs))
+            for row, cert in enumerate(certs):
+                self.cert_table.setItem(row, 0, QTableWidgetItem(cert.subject_cn))
+                self.cert_table.setItem(row, 1, QTableWidgetItem("uMy"))
+                self.cert_table.setItem(row, 2, QTableWidgetItem(""))
+                self.cert_table.setItem(row, 3, QTableWidgetItem(cert.thumbprint[:16] + "..." if len(cert.thumbprint) > 16 else cert.thumbprint))
+                self.cert_table.item(row, 0).setData(Qt.UserRole, cert)
+            self.status_label.setText(t("found_certs", count=len(certs)))
+            if len(certs) > 0:
+                self.cert_table.selectRow(0)
+                self._on_cert_clicked(self.cert_table.model().index(0, 0))
         except Exception as e:
-            self.status_label.setText(f"Error loading certificates: {e}")
+            self.status_label.setText(t("error_loading_certs", error=str(e)))
 
-    def _on_cert_change(self, text):
-        idx = self.cert_combo.currentIndex()
-        if idx >= 0:
-            self.selected_cert = self.cert_combo.itemData(idx)
+    def _on_cert_clicked(self, index):
+        row = index.row()
+        item = self.cert_table.item(row, 0)
+        if item:
+            self.selected_cert = item.data(Qt.UserRole)
             if self.selected_cert:
-                self.cert_info.setText(
-                    f"Owner: {self.selected_cert.subject_cn}\n"
-                    f"Issuer: {self.selected_cert.issuer_cn}\n"
-                    f"Serial: {self.selected_cert.serial}\n"
-                    f"SHA1: {self.selected_cert.thumbprint}"
-                )
+                self.status_label.setText(f"{t('owner')} {self.selected_cert.subject_cn} | {t('issuer')} {self.selected_cert.issuer_cn}")
 
     def _on_profile_change(self, name):
-        if name in BUILT_IN_PROFILES:
-            p = BUILT_IN_PROFILES[name]
+        profile_map = {t("minimal"): "minimal", t("standard"): "standard", t("detailed"): "detailed"}
+        profile_name = profile_map.get(name, name)
+        if profile_name in BUILT_IN_PROFILES:
+            p = BUILT_IN_PROFILES[profile_name]
             self.settings.stamp_profile = StampProfile.from_dict(p.to_dict())
-            self.scale.setText(str(p.scale))
 
     def _add_files(self):
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Select PDF files", "", "PDF files (*.pdf);;All files (*.*)"
+            self, t("select_pdf"), "", t("pdf_filter")
         )
         for f in files:
             if f not in self.pdf_files:
                 self.pdf_files.append(f)
                 self.file_list.addItem(os.path.basename(f))
-        self.file_summary.setText(f"Selected PDFs: {len(self.pdf_files)}")
+        self._update_file_summary()
+
+    def _remove_file(self):
+        row = self.file_list.currentRow()
+        if row >= 0:
+            self.file_list.takeItem(row)
+            self.pdf_files.pop(row)
+            self._update_file_summary()
 
     def _clear_files(self):
         self.pdf_files.clear()
         self.file_list.clear()
-        self.file_summary.setText("Selected PDFs: 0")
+        self._update_file_summary()
+
+    def _update_file_summary(self):
+        count = len(self.pdf_files)
+        if count == 0:
+            self.file_summary.setText(t("select_pdf"))
+        else:
+            total = sum(os.path.getsize(f) for f in self.pdf_files if os.path.exists(f))
+            self.file_summary.setText(t("file_count", count=count, size=self._format_size(total)))
+
+    def _format_size(self, size):
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024:
+                return f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} TB"
 
     def _browse_output(self):
-        d = QFileDialog.getExistingDirectory(self, "Select output folder")
+        d = QFileDialog.getExistingDirectory(self, t("select_output"))
         if d:
             self.output_dir.setText(d)
 
     def _get_profile(self) -> StampProfile:
+        profile_map = {t("minimal"): "minimal", t("standard"): "standard", t("detailed"): "detailed"}
+        position_map = {t("bottom_right"): "bottom-right", t("bottom_left"): "bottom-left",
+                       t("top_right"): "top-right", t("top_left"): "top-left"}
+
         p = StampProfile.from_dict(self.settings.stamp_profile.to_dict())
-        try:
-            p.scale = float(self.scale.text())
-        except ValueError:
-            pass
-        p.position = self.position_select.currentText()
+        p.position = position_map.get(self.position_select.currentText(), "bottom-right")
         p.pages = self.pages_edit.text() or "1-"
         p.normalize()
         return p
 
     def _sign(self):
         if not self.pdf_files:
-            QMessageBox.warning(self, "Error", "Add at least one PDF file.")
+            QMessageBox.warning(self, t("error"), t("no_files"))
             return
         if not self.selected_cert:
-            QMessageBox.warning(self, "Error", "Select a certificate.")
+            QMessageBox.warning(self, t("error"), t("no_certificate"))
             return
 
         self.progress.setMaximum(len(self.pdf_files))
         self.progress.setValue(0)
-        self.progress.setVisible(True)
-        self.status_label.setText("Signing...")
+        self.status_label.setText(t("signing"))
 
         profile = self._get_profile()
         self.settings.verify_after_signing = self.verify_after.isChecked()
@@ -311,259 +344,29 @@ class MainWindow(QMainWindow):
 
     def _on_progress(self, current, total, path):
         self.progress.setValue(current)
-        self.status_label.setText(f"Signing {current}/{total}: {os.path.basename(path)}")
+        self.status_label.setText(t("signing_progress", current=current, total=total, file=os.path.basename(path)))
 
     def _on_sign_done(self, results):
-        self.progress.setVisible(False)
-        self.status_label.setText("Done")
+        self.progress.setValue(self.progress.maximum())
+        self.status_label.setText(t("done"))
         log_info(f"Signing completed: {len(results)} file(s)")
         QMessageBox.information(
-            self, "Done",
-            f"Processed {len(results)} file(s)\n\n" + "\n\n".join(results),
+            self, t("done"),
+            t("processed_files", count=len(results)) + "\n\n" + "\n\n".join(results),
         )
 
     def _on_sign_error(self, error):
-        self.progress.setVisible(False)
-        self.status_label.setText(f"Error: {error}")
+        self.progress.setValue(0)
+        self.status_label.setText(f"{t('error')}: {error}")
         log_error("Signing failed", Exception(error))
-        QMessageBox.critical(self, "Error", f"Signing failed:\n{error}")
-
-    def _verify(self):
-        if not self.pdf_files:
-            QMessageBox.warning(self, "Error", "Add files to verify.")
-            return
-        reports = []
-        for f in self.pdf_files:
-            reports.append(verify_signature(f))
-        report_text = format_verification_report(reports)
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Verification Report")
-        dlg.setText(report_text[:2000])
-        dlg.exec_()
-
-    def _open_stamp_editor(self):
-        dlg = StampEditorDialog(self.settings.stamp_profile, self)
-        if dlg.exec_():
-            self.settings.stamp_profile = dlg.profile
-            save_settings(self.settings)
-
-    def _open_diagnostics(self):
-        report = run_diagnostics(APP_VERSION)
-        text = format_report(report)
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("CryptoPro Diagnostics")
-        dlg.setText(text[:2000])
-        dlg.exec_()
+        QMessageBox.critical(self, t("error"), f"{t('signing_failed')}\n{error}")
 
     def _open_about(self):
         text = (
             f"{APP_NAME}\n"
-            f"Version: {APP_VERSION}\n"
+            f"{t('version')}: {APP_VERSION}\n"
             f"{APP_COPYRIGHT}\n\n"
-            f"Project: {APP_PROJECT_URL}\n\n"
+            f"{t('project')}: {APP_PROJECT_URL}\n\n"
             f"License: AGPL-3.0-or-later"
         )
-        QMessageBox.about(self, "About", text)
-
-
-class StampEditorDialog(QMessageBox):
-    def __init__(self, profile: StampProfile, parent=None):
-        super().__init__(parent)
-        self.profile = StampProfile.from_dict(profile.to_dict())
-        self.setWindowTitle("Stamp Editor")
-        self.setMinimumSize(700, 600)
-
-    def exec_(self):
-        from PyQt5.QtWidgets import QDialog, QDialogButtonBox
-        from PyQt5.QtGui import QPixmap, QImage
-        from PyQt5.QtCore import Qt
-        import tempfile
-
-        dlg = QDialog(self.parent())
-        dlg.setWindowTitle("Stamp Editor")
-        dlg.setMinimumSize(700, 600)
-
-        layout = QVBoxLayout(dlg)
-
-        top_layout = QHBoxLayout()
-
-        form_group = QGroupBox("Settings")
-        form = QFormLayout()
-
-        self.profile_combo = QComboBox()
-        self.profile_combo.addItems(["minimal", "standard", "detailed"])
-        self.profile_combo.setCurrentText(self.profile.name)
-        self.profile_combo.currentTextChanged.connect(self._load_builtin)
-        form.addRow("Template:", self.profile_combo)
-
-        self.pages = QLineEdit(self.profile.pages)
-        form.addRow("Pages:", self.pages)
-
-        self.position = QComboBox()
-        self.position.addItems(["bottom-right", "bottom-left", "top-right", "top-left"])
-        self.position.setCurrentText(self.profile.position)
-        form.addRow("Position:", self.position)
-
-        self.width = QDoubleSpinBox()
-        self.width.setRange(40, 200)
-        self.width.setValue(self.profile.width_mm)
-        self.width.setSuffix(" mm")
-        form.addRow("Width:", self.width)
-
-        self.height = QDoubleSpinBox()
-        self.height.setRange(15, 100)
-        self.height.setValue(self.profile.height_mm)
-        self.height.setSuffix(" mm")
-        form.addRow("Height:", self.height)
-
-        self.font_size = QDoubleSpinBox()
-        self.font_size.setRange(4, 16)
-        self.font_size.setValue(self.profile.font_size)
-        self.font_size.setSuffix(" pt")
-        form.addRow("Font size:", self.font_size)
-
-        self.opacity = QSpinBox()
-        self.opacity.setRange(10, 100)
-        self.opacity.setValue(int(self.profile.opacity * 100))
-        self.opacity.setSuffix(" %")
-        form.addRow("Opacity:", self.opacity)
-
-        self.include_owner = QCheckBox()
-        self.include_owner.setChecked(self.profile.include_owner)
-        form.addRow("Owner:", self.include_owner)
-
-        self.include_issuer = QCheckBox()
-        self.include_issuer.setChecked(self.profile.include_issuer)
-        form.addRow("Issuer:", self.include_issuer)
-
-        self.include_date = QCheckBox()
-        self.include_date.setChecked(self.profile.include_date)
-        form.addRow("Date:", self.include_date)
-
-        self.include_reason = QCheckBox()
-        self.include_reason.setChecked(self.profile.include_reason)
-        form.addRow("Reason:", self.include_reason)
-
-        self.include_serial = QCheckBox()
-        self.include_serial.setChecked(self.profile.include_serial)
-        form.addRow("Serial:", self.include_serial)
-
-        self.include_validity = QCheckBox()
-        self.include_validity.setChecked(self.profile.include_validity)
-        form.addRow("Validity:", self.include_validity)
-
-        form_group.setLayout(form)
-        top_layout.addWidget(form_group)
-
-        preview_group = QGroupBox("Preview")
-        preview_layout = QVBoxLayout()
-
-        self.preview_label = QLabel()
-        self.preview_label.setMinimumSize(280, 200)
-        self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setStyleSheet("border: 1px solid #ccc; background: white;")
-        preview_layout.addWidget(self.preview_label)
-
-        preview_group.setLayout(preview_layout)
-        top_layout.addWidget(preview_group)
-
-        layout.addLayout(top_layout)
-
-        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.accepted.connect(dlg.accept)
-        btn_box.rejected.connect(dlg.reject)
-        layout.addWidget(btn_box)
-
-        self._update_preview()
-        for w in [self.include_owner, self.include_issuer, self.include_date,
-                  self.include_reason, self.include_serial, self.include_validity,
-                  self.width, self.height, self.font_size]:
-            if hasattr(w, 'stateChanged'):
-                w.stateChanged.connect(self._update_preview)
-            elif hasattr(w, 'valueChanged'):
-                w.valueChanged.connect(self._update_preview)
-
-        if dlg.exec_():
-            self._save_from_controls()
-            return True
-        return False
-
-    def _load_builtin(self, name):
-        if name in BUILT_IN_PROFILES:
-            p = BUILT_IN_PROFILES[name]
-            self.profile = StampProfile.from_dict(p.to_dict())
-            self.pages.setText(p.pages)
-            self.position.setCurrentText(p.position)
-            self.width.setValue(p.width_mm)
-            self.height.setValue(p.height_mm)
-            self.font_size.setValue(p.font_size)
-            self.opacity.setValue(int(p.opacity * 100))
-            self.include_owner.setChecked(p.include_owner)
-            self.include_issuer.setChecked(p.include_issuer)
-            self.include_date.setChecked(p.include_date)
-            self.include_reason.setChecked(p.include_reason)
-            self.include_serial.setChecked(p.include_serial)
-            self.include_validity.setChecked(p.include_validity)
-            self._update_preview()
-
-    def _update_preview(self):
-        from PyQt5.QtGui import QPixmap, QImage
-        from PyQt5.QtCore import Qt
-        import tempfile
-        import os
-
-        try:
-            profile = StampProfile(
-                width_mm=self.width.value(),
-                height_mm=self.height.value(),
-                font_size=self.font_size.value(),
-                include_owner=self.include_owner.isChecked(),
-                include_issuer=self.include_issuer.isChecked(),
-                include_date=self.include_date.isChecked(),
-                include_reason=self.include_reason.isChecked(),
-                include_serial=self.include_serial.isChecked(),
-                include_validity=self.include_validity.isChecked(),
-            )
-
-            with tempfile.TemporaryDirectory() as tmpdir:
-                stamp_path = os.path.join(tmpdir, "preview.png")
-                create_stamp_image(
-                    stamp_path,
-                    owner="Иванов И.И.",
-                    issuer="CryptoPro RC5 FFD",
-                    serial="AABBCCDD12345678",
-                    thumbprint="1122334455667788AABB",
-                    reason="Согласование",
-                    valid_from="01.01.2025",
-                    valid_to="31.12.2027",
-                    profile=profile,
-                )
-
-                pixmap = QPixmap(stamp_path)
-                if not pixmap.isNull():
-                    scaled = pixmap.scaled(
-                        260, 180,
-                        Qt.KeepAspectRatio,
-                        Qt.SmoothTransformation,
-                    )
-                    self.preview_label.setPixmap(scaled)
-                else:
-                    self.preview_label.setText("Preview not available")
-        except Exception:
-            self.preview_label.setText("Preview error")
-
-    def _save_from_controls(self):
-        self.profile.name = self.profile_combo.currentText()
-        self.profile.pages = self.pages.text()
-        self.profile.position = self.position.currentText()
-        self.profile.width_mm = self.width.value()
-        self.profile.height_mm = self.height.value()
-        self.profile.font_size = self.font_size.value()
-        self.profile.opacity = self.opacity.value() / 100.0
-        self.profile.include_owner = self.include_owner.isChecked()
-        self.profile.include_issuer = self.include_issuer.isChecked()
-        self.profile.include_date = self.include_date.isChecked()
-        self.profile.include_reason = self.include_reason.isChecked()
-        self.profile.include_serial = self.include_serial.isChecked()
-        self.profile.include_validity = self.include_validity.isChecked()
-        self.profile.normalize()
+        QMessageBox.about(self, t("about_title"), text)
