@@ -32,3 +32,6 @@ pdfsigner = "pdfsigner.main:main"
 [project.urls]
 Homepage = "https://github.com/shurshick/pdf-signer-linux"
 Repository = "https://github.com/shurshick/pdf-signer-linux"
+
+[tool.setuptools.packages.find]
+include = ["pdfsigner*"]
