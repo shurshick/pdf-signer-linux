@@ -148,13 +148,17 @@ def _verify_detached(sig_path: str, result: dict) -> dict:
 
 
 def _verify_embedded(pdf_path: str, result: dict) -> dict:
+    sig_path = pdf_path + ".sig"
+    if os.path.isfile(sig_path):
+        result["details"].append(f"Detached signature found: {os.path.basename(sig_path)}")
+        return _verify_detached(sig_path, result)
     try:
         from pyhanko.pdf_utils.reader import PdfFileReader
         with open(pdf_path, "rb") as f:
             reader = PdfFileReader(f)
             if "/AcroForm" not in reader.trailer["/Root"]:
                 result["status"] = "WARNING"
-                result["warnings"].append("No signature field found")
+                result["warnings"].append("No embedded signature and no .sig file found")
                 return result
         result["status"] = "VALID"
         result["details"].append("PDF signature structure found")
