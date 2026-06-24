@@ -127,7 +127,6 @@ jobs:
           mkdir -p "$BUILD_DIR/usr/bin"
           mkdir -p "$BUILD_DIR/usr/share/applications"
           mkdir -p "$BUILD_DIR/usr/share/pixmaps"
-          mkdir -p "$BUILD_DIR/usr/share/icons"
 
           cp dist/pdfsigner "$BUILD_DIR/usr/bin/pdfsigner"
           chmod 755 "$BUILD_DIR/usr/bin/pdfsigner"
@@ -147,15 +146,14 @@ jobs:
 
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
-          cat > ~/rpmbuild/SPECS/pdfsigner.spec << EOF
+          cat > ~/rpmbuild/SPECS/pdfsigner.spec << 'SPEC'
           Name:           pdfsigner
-          Version:        ${VERSION}
-          Release:        1
+          Version:        VERSION_PLACEHOLDER
+          Release:        1%{?dist}
           Summary:        Desktop PDF signing and visible stamp tool for Linux
           License:        AGPL-3.0-or-later
           URL:            https://github.com/shurshick/pdf-signer-linux
-          Arch:           ${ARCH}
-          Requires:       python3 >= 3.9
+          BuildArch:      x86_64
 
           %description
           Desktop PDF signing and visible stamp tool for Linux with CryptoPro CSP.
@@ -163,17 +161,29 @@ jobs:
           signature verification, and CryptoPro diagnostics.
 
           %install
-          cp -a ${GITHUB_WORKSPACE}/${BUILD_DIR}/* %{buildroot}/
+          mkdir -p %{buildroot}/usr/bin
+          mkdir -p %{buildroot}/usr/share/applications
+          mkdir -p %{buildroot}/usr/share/pixmaps
+          cp %{_sourcedir}/pdfsigner %{buildroot}/usr/bin/pdfsigner
+          chmod 755 %{buildroot}/usr/bin/pdfsigner
+          cp %{_sourcedir}/pdfsigner.desktop %{buildroot}/usr/share/applications/pdfsigner.desktop
+          cp %{_sourcedir}/pdfsigner.png %{buildroot}/usr/share/pixmaps/pdfsigner.png || touch %{buildroot}/usr/share/pixmaps/pdfsigner.png
 
           %files
           /usr/bin/pdfsigner
           /usr/share/applications/pdfsigner.desktop
           /usr/share/pixmaps/pdfsigner.png
-          EOF
+          SPEC
+
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" ~/rpmbuild/SPECS/pdfsigner.spec
+
+          cp dist/pdfsigner ~/rpmbuild/SOURCES/
+          cp "$BUILD_DIR/usr/share/applications/pdfsigner.desktop" ~/rpmbuild/SOURCES/
+          touch ~/rpmbuild/SOURCES/pdfsigner.png
 
           rpmbuild -bb ~/rpmbuild/SPECS/pdfsigner.spec --define "_topdir $HOME/rpmbuild"
 
-          cp ~/rpmbuild/RPMS/${ARCH}/${PKG_NAME}-${VERSION}-1.${ARCH}.rpm dist/
+          cp ~/rpmbuild/RPMS/${ARCH}/${PKG_NAME}-${VERSION}-1.*.${ARCH}.rpm dist/
           rm -rf "$BUILD_DIR"
 
       - name: Upload artifacts
