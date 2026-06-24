@@ -45,8 +45,8 @@ jobs:
           VERSION=${{ inputs.version }} bash packaging/build-rpm.sh
         working-directory: ${{ github.workspace }}
 
-      - name: List artifacts
-        run: ls -lh dist/
+      - name: List dist files
+        run: ls -la dist/
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
