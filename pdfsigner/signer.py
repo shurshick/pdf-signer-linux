@@ -6,16 +6,17 @@ from pdfsigner.certstore import CertInfo, CSPTESR_PATH
 
 
 def sign_detached(pdf_path: str, cert: CertInfo, sig_path: str) -> str:
-    if not cert.subject_cn:
-        raise ValueError("Certificate CN is empty")
     if not os.path.isfile(pdf_path):
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
     if not os.path.isfile(CSPTESR_PATH):
         raise FileNotFoundError(f"csptest not found at {CSPTESR_PATH}")
+    cert_id = cert.subject_cn or cert.thumbprint
+    if not cert_id:
+        raise ValueError("Certificate CN and thumbprint are both empty")
     cmd = [
         CSPTESR_PATH,
         "-sfsign", "-sign", "-detached", "-add",
-        "-my", cert.subject_cn,
+        "-my", cert_id,
         "-in", os.path.abspath(pdf_path),
         "-out", os.path.abspath(sig_path),
     ]
