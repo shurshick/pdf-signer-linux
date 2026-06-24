@@ -28,16 +28,35 @@ class CertInfo:
         return " | ".join(parts)
 
 
-CERTMGR_PATH = "/opt/cprocsp/bin/amd64/certmgr"
-CSPTESR_PATH = "/opt/cprocsp/bin/amd64/csptest"
+CERTMGR_PATHS = [
+    "/opt/cprocsp/bin/amd64/certmgr",
+    "/opt/cprocsp/bin/amd64/certmgr.exe",
+    "/usr/bin/certmgr",
+]
+CSPTESR_PATHS = [
+    "/opt/cprocsp/bin/amd64/csptest",
+    "/opt/cprocsp/bin/amd64/csptest.exe",
+    "/usr/bin/csptest",
+]
+
+
+def _find_executable(paths: list) -> Optional[str]:
+    for p in paths:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+CERTMGR_PATH = _find_executable(CERTMGR_PATHS) or CERTMGR_PATHS[0]
+CSPTESR_PATH = _find_executable(CSPTESR_PATHS) or CSPTESR_PATHS[0]
 
 
 def is_certmgr_available() -> bool:
-    return os.path.isfile(CERTMGR_PATH)
+    return _find_executable(CERTMGR_PATHS) is not None
 
 
 def is_csptest_available() -> bool:
-    return os.path.isfile(CSPTESR_PATH)
+    return _find_executable(CSPTESR_PATHS) is not None
 
 
 def load_certificates() -> List[CertInfo]:
@@ -54,16 +73,21 @@ def load_certificates() -> List[CertInfo]:
 
 
 def _load_from_certmgr() -> List[CertInfo]:
-    if not is_certmgr_available():
+    certmgr = _find_executable(CERTMGR_PATHS)
+    if not certmgr:
         return []
     try:
         result = subprocess.run(
-            [CERTMGR_PATH, "-list", "-store", "uMy"],
+            [certmgr, "-list", "-store", "uMy"],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode != 0:
+            if result.stderr:
+                pass
             return []
         return _parse_certmgr_output(result.stdout)
+    except FileNotFoundError:
+        return []
     except Exception:
         return []
 

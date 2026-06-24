@@ -163,6 +163,16 @@ class MainWindow(QMainWindow):
         self.profile_select.currentTextChanged.connect(self._on_profile_change)
         opt_layout.addWidget(self.profile_select, 5, 1)
 
+        opt_layout.addWidget(QLabel("Position:"), 6, 0)
+        self.position_select = QComboBox()
+        self.position_select.addItems(["bottom-right", "bottom-left", "top-right", "top-left"])
+        self.position_select.setCurrentText(self.settings.stamp_profile.position)
+        opt_layout.addWidget(self.position_select, 6, 1)
+
+        opt_layout.addWidget(QLabel("Pages:"), 7, 0)
+        self.pages_edit = QLineEdit(self.settings.stamp_profile.pages)
+        opt_layout.addWidget(self.pages_edit, 7, 1)
+
         options_group.setLayout(opt_layout)
         layout.addWidget(options_group)
 
@@ -266,6 +276,8 @@ class MainWindow(QMainWindow):
             p.scale = float(self.scale.text())
         except ValueError:
             pass
+        p.position = self.position_select.currentText()
+        p.pages = self.pages_edit.text() or "1-"
         p.normalize()
         return p
 
@@ -359,16 +371,23 @@ class StampEditorDialog(QMessageBox):
         super().__init__(parent)
         self.profile = StampProfile.from_dict(profile.to_dict())
         self.setWindowTitle("Stamp Editor")
-        self.setMinimumSize(600, 500)
+        self.setMinimumSize(700, 600)
 
     def exec_(self):
         from PyQt5.QtWidgets import QDialog, QDialogButtonBox
+        from PyQt5.QtGui import QPixmap, QImage
+        from PyQt5.QtCore import Qt
+        import tempfile
+
         dlg = QDialog(self.parent())
         dlg.setWindowTitle("Stamp Editor")
-        dlg.setMinimumSize(600, 500)
+        dlg.setMinimumSize(700, 600)
 
         layout = QVBoxLayout(dlg)
 
+        top_layout = QHBoxLayout()
+
+        form_group = QGroupBox("Settings")
         form = QFormLayout()
 
         self.profile_combo = QComboBox()
@@ -433,13 +452,22 @@ class StampEditorDialog(QMessageBox):
         self.include_validity.setChecked(self.profile.include_validity)
         form.addRow("Validity:", self.include_validity)
 
-        layout.addLayout(form)
+        form_group.setLayout(form)
+        top_layout.addWidget(form_group)
 
-        self.preview = QTextEdit()
-        self.preview.setReadOnly(True)
-        self.preview.setMaximumHeight(120)
-        layout.addWidget(QLabel("Preview:"))
-        layout.addWidget(self.preview)
+        preview_group = QGroupBox("Preview")
+        preview_layout = QVBoxLayout()
+
+        self.preview_label = QLabel()
+        self.preview_label.setMinimumSize(280, 200)
+        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setStyleSheet("border: 1px solid #ccc; background: white;")
+        preview_layout.addWidget(self.preview_label)
+
+        preview_group.setLayout(preview_layout)
+        top_layout.addWidget(preview_group)
+
+        layout.addLayout(top_layout)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btn_box.accepted.connect(dlg.accept)
@@ -448,8 +476,12 @@ class StampEditorDialog(QMessageBox):
 
         self._update_preview()
         for w in [self.include_owner, self.include_issuer, self.include_date,
-                  self.include_reason, self.include_serial, self.include_validity]:
-            w.stateChanged.connect(self._update_preview)
+                  self.include_reason, self.include_serial, self.include_validity,
+                  self.width, self.height, self.font_size]:
+            if hasattr(w, 'stateChanged'):
+                w.stateChanged.connect(self._update_preview)
+            elif hasattr(w, 'valueChanged'):
+                w.valueChanged.connect(self._update_preview)
 
         if dlg.exec_():
             self._save_from_controls()
@@ -475,23 +507,50 @@ class StampEditorDialog(QMessageBox):
             self._update_preview()
 
     def _update_preview(self):
-        text = build_stamp_text(
-            StampProfile(
+        from PyQt5.QtGui import QPixmap, QImage
+        from PyQt5.QtCore import Qt
+        import tempfile
+        import os
+
+        try:
+            profile = StampProfile(
+                width_mm=self.width.value(),
+                height_mm=self.height.value(),
+                font_size=self.font_size.value(),
                 include_owner=self.include_owner.isChecked(),
                 include_issuer=self.include_issuer.isChecked(),
                 include_date=self.include_date.isChecked(),
                 include_reason=self.include_reason.isChecked(),
                 include_serial=self.include_serial.isChecked(),
                 include_validity=self.include_validity.isChecked(),
-            ),
-            owner="Preview User",
-            issuer="Preview CA",
-            serial="12345678",
-            reason="Test reason",
-            valid_from="01.01.2025",
-            valid_to="01.01.2027",
-        )
-        self.preview.setText(text)
+            )
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                stamp_path = os.path.join(tmpdir, "preview.png")
+                create_stamp_image(
+                    stamp_path,
+                    owner="Иванов И.И.",
+                    issuer="CryptoPro RC5 FFD",
+                    serial="AABBCCDD12345678",
+                    thumbprint="1122334455667788AABB",
+                    reason="Согласование",
+                    valid_from="01.01.2025",
+                    valid_to="31.12.2027",
+                    profile=profile,
+                )
+
+                pixmap = QPixmap(stamp_path)
+                if not pixmap.isNull():
+                    scaled = pixmap.scaled(
+                        260, 180,
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation,
+                    )
+                    self.preview_label.setPixmap(scaled)
+                else:
+                    self.preview_label.setText("Preview not available")
+        except Exception:
+            self.preview_label.setText("Preview error")
 
     def _save_from_controls(self):
         self.profile.name = self.profile_combo.currentText()

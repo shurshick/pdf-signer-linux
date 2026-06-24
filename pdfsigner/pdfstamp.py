@@ -50,14 +50,31 @@ def _apply_stamp_pymupdf(
     stamp_width_pt = profile.width_mm * 72.0 / 25.4
     stamp_height_pt = profile.height_mm * 72.0 / 25.4
 
+    margin = 36
+
     for page_idx in page_indices:
         if page_idx < 0 or page_idx >= len(doc):
             continue
         page = doc[page_idx]
         rect = page.rect
 
-        x = rect.width - stamp_width_pt - 36
-        y = 36
+        position = profile.position if hasattr(profile, 'position') else "bottom-right"
+
+        if position == "bottom-right":
+            x = rect.width - stamp_width_pt - margin
+            y = margin
+        elif position == "bottom-left":
+            x = margin
+            y = margin
+        elif position == "top-right":
+            x = rect.width - stamp_width_pt - margin
+            y = rect.height - stamp_height_pt - margin
+        elif position == "top-left":
+            x = margin
+            y = rect.height - stamp_height_pt - margin
+        else:
+            x = rect.width - stamp_width_pt - margin
+            y = margin
 
         stamp_rect = fitz.Rect(x, y, x + stamp_width_pt, y + stamp_height_pt)
         page.insert_image(stamp_rect, filename=stamp_image, overlay=True)
@@ -85,9 +102,11 @@ def _apply_stamp_pypdf(
 
     page_indices = _parse_page_range(pages, len(reader.pages))
 
+    position = profile.position if hasattr(profile, 'position') else "bottom-right"
+
     for i, page in enumerate(reader.pages):
         if i in page_indices:
-            overlay = _create_overlay(stamp_image, stamp_width_pt, stamp_height_pt)
+            overlay = _create_overlay(stamp_image, stamp_width_pt, stamp_height_pt, position)
             page.merge_page(overlay)
         writer.add_page(page)
 
@@ -97,7 +116,7 @@ def _apply_stamp_pypdf(
     return output_pdf
 
 
-def _create_overlay(stamp_image: str, width: float, height: float):
+def _create_overlay(stamp_image: str, width: float, height: float, position: str = "bottom-right"):
     from pypdf import PdfReader
     import io
     from reportlab.pdfgen import canvas
@@ -106,8 +125,27 @@ def _create_overlay(stamp_image: str, width: float, height: float):
     buf = io.BytesIO()
     c = canvas.Canvas(buf)
     img = ImageReader(stamp_image)
-    x = 595 - width - 36
-    y = 842 - height - 36
+
+    page_width = 595
+    page_height = 842
+    margin = 36
+
+    if position == "bottom-right":
+        x = page_width - width - margin
+        y = margin
+    elif position == "bottom-left":
+        x = margin
+        y = margin
+    elif position == "top-right":
+        x = page_width - width - margin
+        y = page_height - height - margin
+    elif position == "top-left":
+        x = margin
+        y = page_height - height - margin
+    else:
+        x = page_width - width - margin
+        y = margin
+
     c.drawImage(img, x, y, width, height, mask="auto")
     c.save()
     buf.seek(0)
