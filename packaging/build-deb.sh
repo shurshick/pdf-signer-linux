@@ -6,6 +6,7 @@ VERSION="${VERSION:-1.0.0}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist"
 BUILDROOT="${ROOT_DIR}/.debbuild"
+VENV_DIR="${BUILDROOT}/opt/${APP_NAME}"
 
 echo "==> Checking project files"
 for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/README.md"; do
@@ -24,33 +25,16 @@ mkdir -p "${BUILDROOT}/DEBIAN" \
     "${BUILDROOT}/usr/share/doc/${APP_NAME}" \
     "${DIST_DIR}"
 
-echo "==> Installing Python dependencies"
-pip install pyinstaller 2>/dev/null || true
-pip install -e "${ROOT_DIR}" 2>/dev/null || pip install "${ROOT_DIR}" 2>/dev/null || true
+echo "==> Creating virtualenv with all dependencies"
+python3 -m venv "${VENV_DIR}"
+"${VENV_DIR}/bin/pip" install --upgrade pip
+"${VENV_DIR}/bin/pip" install "${ROOT_DIR}"
 
-echo "==> Building self-contained binary with PyInstaller"
-cd "${ROOT_DIR}"
-pyinstaller \
-    --onefile \
-    --name "${APP_NAME}" \
-    --distpath "${DIST_DIR}" \
-    --workpath "${ROOT_DIR}/build" \
-    --specpath "${ROOT_DIR}" \
-    --hidden-import pdfsigner \
-    --hidden-import pdfsigner.gui \
-    --hidden-import pdfsigner.signer \
-    --hidden-import pdfsigner.stamp \
-    --hidden-import pdfsigner.pdfstamp \
-    --hidden-import pdfsigner.certstore \
-    --hidden-import pdfsigner.settings \
-    --hidden-import pdfsigner.diagnostics \
-    --hidden-import pdfsigner.applog \
-    --collect-all pdfsigner \
-    --noconfirm \
-    pdfsigner/main.py
-
-echo "==> Installing application binary"
-cp "${DIST_DIR}/${APP_NAME}" "${BUILDROOT}/usr/bin/${APP_NAME}"
+echo "==> Creating launcher script"
+cat > "${BUILDROOT}/usr/bin/${APP_NAME}" << LAUNCHER
+#!/bin/bash
+exec ${VENV_DIR}/bin/python3 -m pdfsigner "\$@"
+LAUNCHER
 chmod 755 "${BUILDROOT}/usr/bin/${APP_NAME}"
 
 echo "==> Installing icon"
@@ -74,6 +58,9 @@ echo "==> Installing documentation"
 cp "${ROOT_DIR}/README.md" "${BUILDROOT}/usr/share/doc/${APP_NAME}/" 2>/dev/null || true
 cp "${ROOT_DIR}/LICENSE" "${BUILDROOT}/usr/share/doc/${APP_NAME}/COPYING" 2>/dev/null || true
 
+echo "==> Calculating installed size"
+INSTALLED_SIZE=$(du -sk "${BUILDROOT}" | cut -f1)
+
 echo "==> Creating DEB control file"
 cat > "${BUILDROOT}/DEBIAN/control" << EOF
 Package: ${APP_NAME}
@@ -81,16 +68,18 @@ Version: ${VERSION}
 Section: utils
 Priority: optional
 Architecture: amd64
-Installed-Size: $(du -sk "${BUILDROOT}" | cut -f1)
+Installed-Size: ${INSTALLED_SIZE}
 Maintainer: shurshick <noreply@example.com>
 Homepage: https://github.com/shurshick/pdf-signer-linux
-Depends: libc6, libgl1-mesa-glx | libgl1, libglib2.0-0, libx11-6
+Depends: python3 (>= 3.9)
 Recommends: libcryptopro-java
 Description: Desktop PDF signing and visible stamp tool for Linux with CryptoPro CSP
  Self-contained application for signing PDF documents with CryptoPro CSP
  on Linux. Supports embedded CAdES-BES signatures via PKCS#11, visible
  stamps compliant with GOST R 7.0.97-2025, signature verification, and
- CryptoPro diagnostics. No Python installation required.
+ CryptoPro diagnostics.
+ .
+ Includes all Python dependencies in an isolated virtualenv.
 EOF
 
 echo "==> Building DEB"
