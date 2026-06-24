@@ -7,7 +7,6 @@ RELEASE="${RELEASE:-1}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist"
 BUILDROOT="${ROOT_DIR}/.rpmbuild"
-VENV_DIR="${BUILDROOT}/install/opt/${APP_NAME}"
 
 echo "==> Checking project files"
 for f in "${ROOT_DIR}/pyproject.toml" "${ROOT_DIR}/packaging/rpm/pdfsigner.spec"; do
@@ -22,6 +21,7 @@ rm -rf "${BUILDROOT}"
 mkdir -p "${BUILDROOT}"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "${DIST_DIR}"
 
 echo "==> Creating virtualenv with all dependencies"
+VENV_DIR="${BUILDROOT}/SOURCES/opt/${APP_NAME}"
 python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/pip" install --upgrade pip
 "${VENV_DIR}/bin/pip" install "${ROOT_DIR}"
@@ -61,8 +61,8 @@ isolated virtualenv.
 %install
 rm -rf %{buildroot}
 
-install -D -m 0755 %{_sourcedir}/../BUILDROOT/install/opt/pdfsigner %{buildroot}/opt/pdfsigner
-cp -a %{_sourcedir}/../BUILDROOT/install/opt/pdfsigner/* %{buildroot}/opt/pdfsigner/
+mkdir -p %{buildroot}/opt/pdfsigner
+cp -a %{_sourcedir}/opt/pdfsigner/* %{buildroot}/opt/pdfsigner/
 
 mkdir -p %{buildroot}/usr/bin
 cat > %{buildroot}/usr/bin/pdfsigner << 'LAUNCHER'
