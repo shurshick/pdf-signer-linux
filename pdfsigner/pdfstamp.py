@@ -111,6 +111,12 @@ def _apply_stamp_pypdf(
             if profile.use_custom_position:
                 x = profile.custom_x
                 y = profile.custom_y
+            elif profile.auto_place and not profile.use_custom_position:
+                try:
+                    from pdfsigner.stamp import find_smart_placement
+                    x, y = find_smart_placement(input_pdf, stamp_width_pt, stamp_height_pt)
+                except Exception:
+                    x, y = _calc_position(position, stamp_width_pt, stamp_height_pt, page)
             else:
                 x, y = _calc_position(position, stamp_width_pt, stamp_height_pt, page)
             overlay = _create_overlay(stamp_image, x, y, stamp_width_pt, stamp_height_pt)

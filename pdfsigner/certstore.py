@@ -2,6 +2,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from typing import List, Optional
+from cryptography.hazmat.primitives import hashes
 
 
 @dataclass
@@ -35,7 +36,7 @@ CERTMGR_PATHS = [
     "/opt/cprocsp/bin/amd64/certmgr.exe",
     "/usr/bin/certmgr",
 ]
-CSPTESR_PATHS = [
+CSPTEST_PATHS = [
     "/opt/cprocsp/bin/amd64/csptest",
     "/opt/cprocsp/bin/amd64/csptest.exe",
     "/usr/bin/csptest",
@@ -50,7 +51,7 @@ def _find_executable(paths: list) -> Optional[str]:
 
 
 CERTMGR_PATH = _find_executable(CERTMGR_PATHS) or CERTMGR_PATHS[0]
-CSPTESR_PATH = _find_executable(CSPTESR_PATHS) or CSPTESR_PATHS[0]
+CSPTEST_PATH = _find_executable(CSPTEST_PATHS) or CSPTEST_PATHS[0]
 
 
 def is_certmgr_available() -> bool:
@@ -58,7 +59,7 @@ def is_certmgr_available() -> bool:
 
 
 def is_csptest_available() -> bool:
-    return _find_executable(CSPTESR_PATHS) is not None
+    return _find_executable(CSPTEST_PATHS) is not None
 
 
 def load_certificates() -> List[CertInfo]:
@@ -209,8 +210,8 @@ def _parse_der_cert(der_bytes: bytes) -> Optional[CertInfo]:
             if attr.oid == x509.oid.NameOID.COMMON_NAME:
                 issuer_cn = attr.value
         serial = format(cert.serial_number, 'X')
-        thumbprint = cert.fingerprint(cert.signature_hash_algorithm).hex().upper()
-        not_after = cert.not_after_utc
+        thumbprint = cert.fingerprint(hashes.SHA1()).hex().upper()
+        not_after = str(cert.not_valid_after_utc if hasattr(cert, 'not_valid_after_utc') else cert.not_valid_after)
         return CertInfo(
             subject_cn=cn,
             issuer_cn=issuer_cn,

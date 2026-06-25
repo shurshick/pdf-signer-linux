@@ -2,19 +2,19 @@ import os
 import subprocess
 from typing import Optional
 
-from pdfsigner.certstore import CertInfo, CSPTESR_PATH
+from pdfsigner.certstore import CertInfo, CSPTEST_PATH
 
 
 def sign_detached(pdf_path: str, cert: CertInfo, sig_path: str) -> str:
     if not os.path.isfile(pdf_path):
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
-    if not os.path.isfile(CSPTESR_PATH):
-        raise FileNotFoundError(f"csptest not found at {CSPTESR_PATH}")
+    if not os.path.isfile(CSPTEST_PATH):
+        raise FileNotFoundError(f"csptest not found at {CSPTEST_PATH}")
     cert_id = cert.subject_cn or cert.thumbprint
     if not cert_id:
         raise ValueError("Certificate CN and thumbprint are both empty")
     cmd = [
-        CSPTESR_PATH,
+        CSPTEST_PATH,
         "-sfsign", "-sign", "-detached", "-add",
         "-my", cert_id,
         "-in", os.path.abspath(pdf_path),
@@ -126,9 +126,9 @@ def _verify_detached(sig_path: str, result: dict) -> dict:
         result["warnings"].append("Matching PDF not found")
     else:
         result["details"].append(f"Original PDF: {os.path.basename(pdf_path)}")
-    if os.path.isfile(CSPTESR_PATH):
+    if os.path.isfile(CSPTEST_PATH):
         try:
-            cmd = [CSPTESR_PATH, "-sfsign", "-verify", "-in", sig_path]
+            cmd = [CSPTEST_PATH, "-sfsign", "-verify", "-in", sig_path]
             if pdf_path:
                 cmd.extend(["-data", pdf_path])
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)

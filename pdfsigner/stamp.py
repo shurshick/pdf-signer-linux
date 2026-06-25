@@ -22,6 +22,7 @@ def create_stamp_image(
     valid_to: str = "",
     signature_fn: str = "",
     profile: Optional[StampProfile] = None,
+    lang: str = "ru",
 ) -> str:
     from PIL import Image, ImageDraw, ImageFont
 
@@ -80,7 +81,8 @@ def create_stamp_image(
         logo_y = (h - logo_img.height) // 2
         img.paste(logo_img, (logo_x, logo_y), logo_img)
 
-    header = "Документ подписан электронной подписью"
+    is_ru = lang == "ru"
+    header = "Документ подписан электронной подписью" if is_ru else "Document signed electronically"
     text_x = 8 + logo_offset_x
     draw.text((text_x, 6), header, fill=blue, font=title_font)
     draw.line([(text_x, 6 + font_size + 6), (w - 8, 6 + font_size + 6)], fill=light_blue, width=1)
@@ -92,23 +94,23 @@ def create_stamp_image(
 
     left_lines = []
     if owner:
-        left_lines.append(f"Владелец: {owner}")
+        left_lines.append(f"{'Владелец' if is_ru else 'Owner'}: {owner}")
     if profile.include_issuer and issuer:
-        left_lines.append(f"Издатель: {issuer}")
+        left_lines.append(f"{'Издатель' if is_ru else 'Issuer'}: {issuer}")
     if profile.include_date:
-        left_lines.append(f"Дата: {time.strftime('%d.%m.%Y')}")
+        left_lines.append(f"{'Дата' if is_ru else 'Date'}: {time.strftime('%d.%m.%Y')}")
     if profile.include_reason and reason:
-        left_lines.append(f"Причина: {reason}")
+        left_lines.append(f"{'Причина' if is_ru else 'Reason'}: {reason}")
 
     right_lines = []
     if serial:
-        right_lines.append(f"Серийный: {serial}")
+        right_lines.append(f"{'Серийный' if is_ru else 'Serial'}: {serial}")
     if profile.include_validity and valid_from and valid_to:
-        right_lines.append(f"Действителен: {valid_from} - {valid_to}")
+        right_lines.append(f"{'Действителен' if is_ru else 'Valid'}: {valid_from} - {valid_to}")
     if thumbprint:
         right_lines.append(f"SHA1: {_truncate_hash(thumbprint)}")
     if signature_fn:
-        right_lines.append(f"ЭП: {signature_fn}")
+        right_lines.append(f"{'ЭП' if is_ru else 'Sig'}: {signature_fn}")
 
     for i, line in enumerate(left_lines):
         if y + i * line_h > h - 10:
@@ -143,20 +145,23 @@ def validate_stamp_size(width_mm: float, height_mm: float, font_size: float) -> 
 
 
 def build_stamp_text(profile: StampProfile, owner: str, issuer: str, serial: str,
-                     reason: str, valid_from: str = "", valid_to: str = "") -> str:
-    lines = ["Документ подписан электронной подписью"]
+                     reason: str, valid_from: str = "", valid_to: str = "",
+                     lang: str = "ru") -> str:
+    is_ru = lang == "ru"
+    header = "Документ подписан электронной подписью" if is_ru else "Document signed electronically"
+    lines = [header]
     if profile.include_owner and owner:
-        lines.append(f"Владелец: {owner}")
+        lines.append(f"{'Владелец' if is_ru else 'Owner'}: {owner}")
     if profile.include_issuer and issuer:
-        lines.append(f"Издатель: {issuer}")
+        lines.append(f"{'Издатель' if is_ru else 'Issuer'}: {issuer}")
     if profile.include_date:
-        lines.append(f"Дата: {time.strftime('%d.%m.%Y')}")
+        lines.append(f"{'Дата' if is_ru else 'Date'}: {time.strftime('%d.%m.%Y')}")
     if profile.include_reason and reason:
-        lines.append(f"Причина: {reason}")
+        lines.append(f"{'Причина' if is_ru else 'Reason'}: {reason}")
     if profile.include_serial and serial:
-        lines.append(f"Серийный номер: {serial}")
+        lines.append(f"{'Серийный номер' if is_ru else 'Serial number'}: {serial}")
     if profile.include_validity and valid_from and valid_to:
-        lines.append(f"Действителен: {valid_from} - {valid_to}")
+        lines.append(f"{'Действителен' if is_ru else 'Valid'}: {valid_from} - {valid_to}")
     if profile.include_custom and profile.custom_text:
         lines.append(profile.custom_text)
     return "\n".join(lines)

@@ -37,7 +37,7 @@ def run_diagnostics(app_version: str) -> DiagnosticReport:
     from pdfsigner import APP_VERSION
     from pdfsigner.certstore import (
         is_certmgr_available, is_csptest_available,
-        load_certificates, CERTMGR_PATH, CSPTESR_PATH,
+        load_certificates, CERTMGR_PATH, CSPTEST_PATH,
     )
 
     report = DiagnosticReport(app_version=app_version or APP_VERSION)
@@ -48,9 +48,9 @@ def run_diagnostics(app_version: str) -> DiagnosticReport:
         report.items.append(DiagnosticItem("ERROR", "certmgr", f"{CERTMGR_PATH} not found"))
 
     if is_csptest_available():
-        report.items.append(DiagnosticItem("OK", "csptest", f"{CSPTESR_PATH} found"))
+        report.items.append(DiagnosticItem("OK", "csptest", f"{CSPTEST_PATH} found"))
     else:
-        report.items.append(DiagnosticItem("ERROR", "csptest", f"{CSPTESR_PATH} not found"))
+        report.items.append(DiagnosticItem("ERROR", "csptest", f"{CSPTEST_PATH} not found"))
 
     try:
         certs = load_certificates()

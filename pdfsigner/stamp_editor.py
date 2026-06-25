@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPoint, QRect
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QFont, QPen
 
+from pdfsigner.i18n import t
 from pdfsigner.settings import StampProfile
 
 
@@ -21,7 +22,7 @@ class StampPreviewDialog(QDialog):
         self.drag_offset = QPoint()
         self.stamp_x = 0.0
         self.stamp_y = 0.0
-        self.setWindowTitle("Stamp Editor")
+        self.setWindowTitle(t("stamp_editor_title"))
         self.setMinimumSize(900, 700)
         self._init_ui()
 
@@ -30,50 +31,50 @@ class StampPreviewDialog(QDialog):
 
         controls = QGridLayout()
 
-        controls.addWidget(QLabel("Width (mm):"), 0, 0)
+        controls.addWidget(QLabel(t("width_mm")), 0, 0)
         self.width_spin = QDoubleSpinBox()
         self.width_spin.setRange(40, 200)
         self.width_spin.setValue(self.profile.width_mm)
         self.width_spin.valueChanged.connect(self._on_param_changed)
         controls.addWidget(self.width_spin, 0, 1)
 
-        controls.addWidget(QLabel("Height (mm):"), 0, 2)
+        controls.addWidget(QLabel(t("height_mm")), 0, 2)
         self.height_spin = QDoubleSpinBox()
         self.height_spin.setRange(15, 100)
         self.height_spin.setValue(self.profile.height_mm)
         self.height_spin.valueChanged.connect(self._on_param_changed)
         controls.addWidget(self.height_spin, 0, 3)
 
-        controls.addWidget(QLabel("Font size:"), 1, 0)
+        controls.addWidget(QLabel(t("font_size")), 1, 0)
         self.font_spin = QDoubleSpinBox()
         self.font_spin.setRange(4, 16)
         self.font_spin.setValue(self.profile.font_size)
         self.font_spin.valueChanged.connect(self._on_param_changed)
         controls.addWidget(self.font_spin, 1, 1)
 
-        controls.addWidget(QLabel("Position:"), 1, 2)
+        controls.addWidget(QLabel(t("position")), 1, 2)
         self.position_combo = QComboBox()
         self.position_combo.addItems(["bottom-right", "bottom-left", "top-right", "top-left"])
         self.position_combo.setCurrentText(self.profile.position)
         self.position_combo.currentTextChanged.connect(self._on_param_changed)
         controls.addWidget(self.position_combo, 1, 3)
 
-        self.include_owner = QCheckBox("Owner")
+        self.include_owner = QCheckBox(t("include_owner"))
         self.include_owner.setChecked(self.profile.include_owner)
         self.include_owner.toggled.connect(self._on_param_changed)
         controls.addWidget(self.include_owner, 2, 0)
 
-        self.include_issuer = QCheckBox("Issuer")
+        self.include_issuer = QCheckBox(t("include_issuer"))
         self.include_issuer.setChecked(self.profile.include_issuer)
         self.include_issuer.toggled.connect(self._on_param_changed)
         controls.addWidget(self.include_issuer, 2, 1)
 
-        self.include_date = QCheckBox("Date")
+        self.include_date = QCheckBox(t("include_date"))
         self.include_date.setChecked(self.profile.include_date)
         self.include_date.toggled.connect(self._on_param_changed)
         controls.addWidget(self.include_date, 2, 2)
 
-        self.include_reason = QCheckBox("Reason")
+        self.include_reason = QCheckBox(t("include_reason_short"))
         self.include_reason.setChecked(self.profile.include_reason)
         self.include_reason.toggled.connect(self._on_param_changed)
         controls.addWidget(self.include_reason, 2, 3)
@@ -87,14 +88,14 @@ class StampPreviewDialog(QDialog):
         layout.addWidget(self.preview_label)
 
         coords = QHBoxLayout()
-        coords.addWidget(QLabel("X (mm):"))
+        coords.addWidget(QLabel(t("x_mm")))
         self.x_spin = QDoubleSpinBox()
         self.x_spin.setRange(0, 500)
         self.x_spin.setDecimals(1)
         self.x_spin.valueChanged.connect(self._on_coord_changed)
         coords.addWidget(self.x_spin)
 
-        coords.addWidget(QLabel("Y (mm):"))
+        coords.addWidget(QLabel(t("y_mm")))
         self.y_spin = QDoubleSpinBox()
         self.y_spin.setRange(0, 500)
         self.y_spin.setDecimals(1)
@@ -105,15 +106,15 @@ class StampPreviewDialog(QDialog):
         layout.addLayout(coords)
 
         btn_row = QHBoxLayout()
-        apply_btn = QPushButton("Apply Position")
+        apply_btn = QPushButton(t("apply_position"))
         apply_btn.clicked.connect(self._apply_position)
         btn_row.addWidget(apply_btn)
 
-        reset_btn = QPushButton("Reset to Corner")
+        reset_btn = QPushButton(t("reset_position"))
         reset_btn.clicked.connect(self._reset_position)
         btn_row.addWidget(reset_btn)
 
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton(t("close"))
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)

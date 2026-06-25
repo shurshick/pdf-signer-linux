@@ -1,23 +1,20 @@
-import json
 import os
-import subprocess
-import sys
 import time
 from typing import Optional
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QPushButton, QComboBox, QCheckBox, QFileDialog,
-    QMessageBox, QProgressBar, QGroupBox, QListWidget, QTextEdit,
-    QSplitter, QTabWidget, QSpinBox, QDoubleSpinBox, QSlider,
-    QFormLayout, QFrame, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QToolTip,
+    QMessageBox, QProgressBar, QGroupBox, QListWidget,
+    QSpinBox, QDoubleSpinBox,
+    QTableWidget, QTableWidgetItem, QHeaderView,
+    QAbstractItemView,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt5.QtGui import QFont, QIcon, QDesktopServices, QKeySequence
 
 from pdfsigner import APP_VERSION, APP_NAME, APP_PROJECT_URL, APP_COPYRIGHT
-from pdfsigner.i18n import t
+from pdfsigner.i18n import t, get_lang
 from pdfsigner.settings import (
     ApplicationSettings, StampProfile, BUILT_IN_PROFILES,
     load_settings, save_settings, export_settings, import_settings,
@@ -38,7 +35,7 @@ class SignThread(QThread):
     finished = pyqtSignal(list)
     error = pyqtSignal(str)
 
-    def __init__(self, files, cert, profile, reason, output_dir, save_next_to, verify_after, detached_mode):
+    def __init__(self, files, cert, profile, reason, output_dir, save_next_to, verify_after, detached_mode, lang="ru"):
         super().__init__()
         self.files = files
         self.cert = cert
@@ -48,6 +45,7 @@ class SignThread(QThread):
         self.save_next_to = save_next_to
         self.verify_after = verify_after
         self.detached_mode = detached_mode
+        self.lang = lang
 
     def run(self):
         results = []
@@ -80,6 +78,7 @@ class SignThread(QThread):
                         valid_to=time.strftime("%d.%m.%Y"),
                         signature_fn=os.path.basename(sig_path),
                         profile=self.profile,
+                        lang=self.lang,
                     )
                     apply_stamp(pdf_path, output_pdf, stamp_path, self.profile.pages, self.profile)
                     os.remove(stamp_path)
@@ -102,6 +101,7 @@ class SignThread(QThread):
                         valid_to=time.strftime("%d.%m.%Y"),
                         signature_fn="embedded",
                         profile=self.profile,
+                        lang=self.lang,
                     )
                     apply_stamp(pdf_path, output_pdf, stamp_path, self.profile.pages, self.profile)
                     os.remove(stamp_path)
@@ -134,6 +134,7 @@ class MainWindow(QMainWindow):
         self.settings = load_settings()
         self.pdf_files = []
         self.selected_cert = None
+        self._signing = False
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         self.setMinimumSize(900, 650)
         self._init_ui()
@@ -220,9 +221,12 @@ class MainWindow(QMainWindow):
 
         opt_layout.addWidget(QLabel(t("stamp_profile")), 2, 0)
         self.profile_select = QComboBox()
-        self.profile_select.addItems([t("minimal"), t("standard"), t("detailed")])
-        self.profile_select.setCurrentText(t(self.settings.stamp_profile.name))
-        self.profile_select.currentTextChanged.connect(self._on_profile_change)
+        for val in ["minimal", "standard", "detailed"]:
+            self.profile_select.addItem(t(val), val)
+        idx = self.profile_select.findData(self.settings.stamp_profile.name)
+        if idx >= 0:
+            self.profile_select.setCurrentIndex(idx)
+        self.profile_select.currentIndexChanged.connect(self._on_profile_change)
         opt_layout.addWidget(self.profile_select, 2, 1)
 
         opt_layout.addWidget(QLabel(t("position")), 3, 0)
@@ -233,8 +237,9 @@ class MainWindow(QMainWindow):
 
         opt_layout.addWidget(QLabel(t("pages")), 4, 0)
         self.page_select = QComboBox()
-        self.page_select.addItems(["All pages", "First page", "Last page", "Specific page"])
-        self.page_select.currentTextChanged.connect(self._on_page_select_changed)
+        for val, label in [("all", t("all_pages")), ("first", t("first_page")), ("last", t("last_page")), ("specific", t("specific_page"))]:
+            self.page_select.addItem(label, val)
+        self.page_select.currentIndexChanged.connect(self._on_page_select_changed)
         opt_layout.addWidget(self.page_select, 4, 1)
 
         self.specific_page_spin = QSpinBox()
@@ -268,7 +273,7 @@ class MainWindow(QMainWindow):
         self.custom_y_spin.setEnabled(self.settings.stamp_profile.use_custom_position)
         opt_layout.addWidget(self.custom_y_spin, 8, 1)
 
-        stamp_editor_btn = QPushButton("Stamp Editor")
+        stamp_editor_btn = QPushButton(t("stamp_editor_title"))
         stamp_editor_btn.clicked.connect(self._open_stamp_editor)
         opt_layout.addWidget(stamp_editor_btn, 8, 2)
 
@@ -413,12 +418,12 @@ class MainWindow(QMainWindow):
                 if not self.selected_cert.has_private_key:
                     QMessageBox.warning(self, t("stamp_warning"), t("cert_no_key"))
 
-    def _on_profile_change(self, name):
-        profile_map = {t("minimal"): "minimal", t("standard"): "standard", t("detailed"): "detailed"}
-        profile_name = profile_map.get(name, name)
+    def _on_profile_change(self, index):
+        profile_name = self.profile_select.currentData()
         if profile_name in BUILT_IN_PROFILES:
             p = BUILT_IN_PROFILES[profile_name]
             self.settings.stamp_profile = StampProfile.from_dict(p.to_dict())
+            self._apply_settings_to_ui()
 
     def _add_files(self):
         files, _ = QFileDialog.getOpenFileNames(
@@ -487,24 +492,34 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, t("error"), str(e))
 
-    def _on_page_select_changed(self, text):
-        self.specific_page_spin.setEnabled(text == "Specific page")
+    def _on_page_select_changed(self, index):
+        self.specific_page_spin.setEnabled(self.page_select.currentData() == "specific")
 
     def _get_pages_str(self):
-        choice = self.page_select.currentText()
-        if choice == "First page":
+        choice = self.page_select.currentData()
+        if choice == "first":
             return "1"
-        elif choice == "Last page":
+        elif choice == "last":
             return "1-"
-        elif choice == "Specific page":
-            n = self.specific_page_spin.value()
-            return str(n)
+        elif choice == "specific":
+            return str(self.specific_page_spin.value())
         return "1-"
 
     def _apply_settings_to_ui(self):
         self.verify_after.setChecked(self.settings.verify_after_signing)
         p = self.settings.stamp_profile
         self.position_select.setCurrentText(t(p.position.replace("-", "_")))
+        pages_map = {"1": "first", "1-": "all", "all": "all"}
+        page_key = pages_map.get(p.pages, "specific")
+        idx = self.page_select.findData(page_key)
+        if idx >= 0:
+            self.page_select.setCurrentIndex(idx)
+        if page_key == "specific":
+            parts = p.pages.split(",")
+            try:
+                self.specific_page_spin.setValue(int(parts[0]))
+            except (ValueError, IndexError):
+                pass
         self.auto_place_check.setChecked(p.auto_place)
         self.custom_pos_check.setChecked(p.use_custom_position)
         self.custom_x_spin.setValue(p.custom_x * 25.4 / 72.0)
@@ -537,6 +552,8 @@ class MainWindow(QMainWindow):
         return p
 
     def _sign(self):
+        if self._signing:
+            return
         if not self.pdf_files:
             QMessageBox.warning(self, t("error"), t("no_files"))
             return
@@ -544,6 +561,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, t("error"), t("no_certificate"))
             return
 
+        self._signing = True
         self.progress.setMaximum(len(self.pdf_files))
         self.progress.setValue(0)
         self.status_label.setText(t("signing"))
@@ -558,6 +576,7 @@ class MainWindow(QMainWindow):
             self.reason.text(), self.output_dir.text(),
             self.save_next.isChecked(), self.verify_after.isChecked(),
             self.detached_check.isChecked(),
+            lang=get_lang(),
         )
         self.thread.progress.connect(self._on_progress)
         self.thread.finished.connect(self._on_sign_done)
@@ -569,6 +588,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText(t("signing_progress", current=current, total=total, file=os.path.basename(path)))
 
     def _on_sign_done(self, results):
+        self._signing = False
         self.progress.setValue(self.progress.maximum())
         self.status_label.setText(t("done"))
         log_info(f"Signing completed: {len(results)} file(s)")
@@ -578,6 +598,7 @@ class MainWindow(QMainWindow):
         )
 
     def _on_sign_error(self, error):
+        self._signing = False
         self.progress.setValue(0)
         self.status_label.setText(f"{t('error')}: {error}")
         log_error("Signing failed", Exception(error))
