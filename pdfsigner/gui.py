@@ -135,9 +135,11 @@ class MainWindow(QMainWindow):
         self.pdf_files = []
         self.selected_cert = None
         self._signing = False
+        self._initialized = False
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         self.setMinimumSize(900, 650)
         self._init_ui()
+        self._initialized = True
         self._load_certs()
 
     def _init_ui(self):
@@ -231,8 +233,11 @@ class MainWindow(QMainWindow):
 
         opt_layout.addWidget(QLabel(t("position")), 3, 0)
         self.position_select = QComboBox()
-        self.position_select.addItems([t("bottom_right"), t("bottom_left"), t("top_right"), t("top_left")])
-        self.position_select.setCurrentText(t(self.settings.stamp_profile.position))
+        for val in ["bottom-right", "bottom-left", "top-right", "top-left"]:
+            self.position_select.addItem(t(val.replace("-", "_")), val)
+        idx = self.position_select.findData(self.settings.stamp_profile.position)
+        if idx >= 0:
+            self.position_select.setCurrentIndex(idx)
         opt_layout.addWidget(self.position_select, 3, 1)
 
         opt_layout.addWidget(QLabel(t("pages")), 4, 0)
@@ -423,7 +428,8 @@ class MainWindow(QMainWindow):
         if profile_name in BUILT_IN_PROFILES:
             p = BUILT_IN_PROFILES[profile_name]
             self.settings.stamp_profile = StampProfile.from_dict(p.to_dict())
-            self._apply_settings_to_ui()
+            if self._initialized:
+                self._apply_settings_to_ui()
 
     def _add_files(self):
         files, _ = QFileDialog.getOpenFileNames(
@@ -508,7 +514,9 @@ class MainWindow(QMainWindow):
     def _apply_settings_to_ui(self):
         self.verify_after.setChecked(self.settings.verify_after_signing)
         p = self.settings.stamp_profile
-        self.position_select.setCurrentText(t(p.position.replace("-", "_")))
+        idx = self.position_select.findData(p.position)
+        if idx >= 0:
+            self.position_select.setCurrentIndex(idx)
         pages_map = {"1": "first", "1-": "all", "all": "all"}
         page_key = pages_map.get(p.pages, "specific")
         idx = self.page_select.findData(page_key)
@@ -528,15 +536,7 @@ class MainWindow(QMainWindow):
         self.logo_scale_spin.setValue(p.logo_scale)
 
     def _sync_profile_to_settings(self):
-        position_map = {
-            t("bottom_right"): "bottom-right",
-            t("bottom_left"): "bottom-left",
-            t("top_right"): "top-right",
-            t("top_left"): "top-left",
-        }
-        self.settings.stamp_profile.position = position_map.get(
-            self.position_select.currentText(), "bottom-right"
-        )
+        self.settings.stamp_profile.position = self.position_select.currentData() or "bottom-right"
         self.settings.stamp_profile.pages = self._get_pages_str()
         self.settings.stamp_profile.auto_place = self.auto_place_check.isChecked()
         self.settings.stamp_profile.use_custom_position = self.custom_pos_check.isChecked()
